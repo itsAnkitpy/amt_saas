@@ -25,9 +25,10 @@ model Tenant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  users      User[]
-  assets     Asset[]
-  departments Department[]
+  users           User[]
+  assets          Asset[]
+  assetCategories AssetCategory[]
+  departments     Department[]
 
   @@map("tenants")
 }
@@ -63,7 +64,8 @@ model User {
   department    Department? @relation(fields: [departmentId], references: [id])
 
   // Assets assigned to user
-  assets        Asset[]
+  assets           Asset[]
+  assetAssignments AssetAssignment[]
 
   // Email unique per tenant (null tenantId = superadmin, unique email)
   @@unique([email, tenantId])
@@ -105,39 +107,122 @@ model Department {
 // ASSETS
 // ============================================
 
-model Asset {
-  id           String      @id @default(cuid())
-  serialNumber String
-  name         String
-  description  String?
-  status       AssetStatus @default(AVAILABLE)
-  condition    AssetCondition @default(WORKING)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+// Asset Category with custom field schema
+model AssetCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?  // Lucide icon name (e.g., "laptop", "monitor")
+
+  // Custom field schema - JSON array defining fields for assets in this category
+  // Example: [{"key": "processor", "label": "Processor", "type": "text", "required": true}]
+  fieldSchema Json     @default("[]")
+
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Tenant relation
-  tenantId     String
-  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  // Assigned user (optional)
-  assignedToId String?
-  assignedTo   User?       @relation(fields: [assignedToId], references: [id])
+  // Assets in this category
+  assets      Asset[]
 
-  @@unique([serialNumber, tenantId])
+  @@unique([tenantId, name])
   @@index([tenantId])
-  @@index([tenantId, status])
+  @@map("asset_categories")
+}
+
+// Asset with custom fields support
+model Asset {
+  id            String         @id @default(cuid())
+  
+  // Core fields (always present)
+  name          String
+  serialNumber  String?
+  assetTag      String?        // Internal tag like "IT-0001"
+  
+  // Category relation
+  categoryId    String
+  category      AssetCategory  @relation(fields: [categoryId], references: [id])
+  
+  // Custom field values - JSON object matching category's fieldSchema
+  // Example: {"processor": "Intel i7", "ram": "16GB", "storage": "512GB SSD"}
+  customFields  Json           @default("{}")
+  
+  // Status
+  status        AssetStatus    @default(AVAILABLE)
+  condition     AssetCondition @default(GOOD)
+  
+  // Location
+  location      String?
+  
+  // Financial
+  purchasePrice Decimal?       @db.Decimal(10, 2)
+  purchaseDate  DateTime?
+  warrantyEnd   DateTime?
+  
+  // Notes
+  notes         String?
+  
+  // Metadata
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  // Tenant relation
+  tenantId      String
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  // Current assignee (denormalized for quick access)
+  assignedToId  String?
+  assignedTo    User?          @relation(fields: [assignedToId], references: [id])
+  
+  // Assignment history
+  assignments   AssetAssignment[]
+
+  @@unique([tenantId, serialNumber])
+  @@unique([tenantId, assetTag])
+  @@index([tenantId])
+  @@index([categoryId])
+  @@index([status])
   @@map("assets")
+}
+
+// Asset assignment history
+model AssetAssignment {
+  id          String    @id @default(cuid())
+  
+  // Asset being assigned
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  // User being assigned to
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Assignment period
+  assignedAt  DateTime  @default(now())
+  returnedAt  DateTime? // Null means currently assigned
+  
+  // Notes
+  notes       String?
+  
+  @@index([assetId])
+  @@index([userId])
+  @@map("asset_assignments")
 }
 
 enum AssetStatus {
   AVAILABLE
   ASSIGNED
-  UNDER_REPAIR
+  MAINTENANCE
   RETIRED
 }
 
 enum AssetCondition {
-  WORKING
-  NOT_WORKING
-  UNDER_REPAIR
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
 }
