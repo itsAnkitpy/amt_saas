@@ -28,11 +28,8 @@ async function ensureDefaultTenant() {
 
 /**
  * Syncs the current Clerk user to our PostgreSQL database.
- * Creates the user if they don't exist, or returns existing user.
- * 
- * This is a workaround for local development where webhooks aren't available.
- * In production, webhooks handle this automatically.
- * 
+ * Returns existing user (including superadmin) or creates new regular user.
+ *
  * @returns The database user or null if not authenticated
  */
 export async function syncUser() {
@@ -49,34 +46,38 @@ export async function syncUser() {
         return null;
     }
 
-    // Try to find existing user
+    // Try to find existing user (could be superadmin or regular user)
     let dbUser = await db.user.findUnique({
         where: { id: clerkUser.id },
     });
 
-    // If user doesn't exist in our DB, create them
-    if (!dbUser) {
-        try {
-            // Ensure default tenant exists first
-            await ensureDefaultTenant();
+    // If user exists, just return them (including superadmin)
+    if (dbUser) {
+        return dbUser;
+    }
 
-            dbUser = await db.user.create({
-                data: {
-                    id: clerkUser.id,
-                    email: primaryEmail,
-                    firstName: clerkUser.firstName || "User",
-                    lastName: clerkUser.lastName || null,
-                    tenantId: "default", // TODO: Handle proper tenant assignment in onboarding
-                },
-            });
-            console.log(`Synced new user to database: ${clerkUser.id}`);
-        } catch (error) {
-            // Handle race condition - user might have been created by another request
-            console.error("Error creating user:", error);
-            dbUser = await db.user.findUnique({
-                where: { id: clerkUser.id },
-            });
-        }
+    // User doesn't exist - create as regular user
+    // (Superadmin should already be seeded)
+    try {
+        // Ensure default tenant exists first
+        await ensureDefaultTenant();
+
+        dbUser = await db.user.create({
+            data: {
+                id: clerkUser.id,
+                email: primaryEmail,
+                firstName: clerkUser.firstName || "User",
+                lastName: clerkUser.lastName || null,
+                tenantId: "default", // Regular users get default tenant
+            },
+        });
+        console.log(`Synced new user to database: ${clerkUser.id}`);
+    } catch (error) {
+        // Handle race condition or other errors
+        console.error("Error creating user:", error);
+        dbUser = await db.user.findUnique({
+            where: { id: clerkUser.id },
+        });
     }
 
     return dbUser;
@@ -85,7 +86,7 @@ export async function syncUser() {
 /**
  * Gets the current user from our database.
  * Does NOT create user if they don't exist (use syncUser for that).
- * 
+ *
  * @returns The database user or null
  */
 export async function getDbUser() {

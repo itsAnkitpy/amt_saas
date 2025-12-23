@@ -49,13 +49,14 @@ model User {
   firstName     String
   lastName      String?
   role          Role     @default(USER)
+  isSuperAdmin  Boolean  @default(false)  // NEW: Quick check for admin access
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // Tenant relation
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Tenant relation (optional for superadmin)
+  tenantId      String?  // CHANGED: Nullable for superadmin users
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Department relation (optional)
   departmentId  String?
@@ -64,7 +65,8 @@ model User {
   // Assets assigned to user
   assets        Asset[]
 
-  @@unique([email, tenantId]) // Same email can exist in different tenants
+  // Email unique per tenant (null tenantId = superadmin, unique email)
+  @@unique([email, tenantId])
   @@index([tenantId])
   @@map("users")
 }
