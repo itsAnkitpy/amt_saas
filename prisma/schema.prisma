@@ -1,0 +1,141 @@
+// AMT SaaS - Prisma Schema
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MULTI-TENANCY
+// ============================================
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // e.g., "acme-corp" for acme-corp.amt.com
+  plan      Plan     @default(FREE)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users      User[]
+  assets     Asset[]
+  departments Department[]
+
+  @@map("tenants")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+// ============================================
+// USERS & AUTH
+// ============================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String
+  firstName     String
+  lastName      String?
+  role          Role     @default(USER)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Tenant relation
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Department relation (optional)
+  departmentId  String?
+  department    Department? @relation(fields: [departmentId], references: [id])
+
+  // Assets assigned to user
+  assets        Asset[]
+
+  @@unique([email, tenantId]) // Same email can exist in different tenants
+  @@index([tenantId])
+  @@map("users")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  USER
+}
+
+// ============================================
+// ORGANIZATION
+// ============================================
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Tenant relation
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Relations
+  users     User[]
+
+  @@unique([name, tenantId])
+  @@index([tenantId])
+  @@map("departments")
+}
+
+// ============================================
+// ASSETS
+// ============================================
+
+model Asset {
+  id           String      @id @default(cuid())
+  serialNumber String
+  name         String
+  description  String?
+  status       AssetStatus @default(AVAILABLE)
+  condition    AssetCondition @default(WORKING)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Tenant relation
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Assigned user (optional)
+  assignedToId String?
+  assignedTo   User?       @relation(fields: [assignedToId], references: [id])
+
+  @@unique([serialNumber, tenantId])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@map("assets")
+}
+
+enum AssetStatus {
+  AVAILABLE
+  ASSIGNED
+  UNDER_REPAIR
+  RETIRED
+}
+
+enum AssetCondition {
+  WORKING
+  NOT_WORKING
+  UNDER_REPAIR
+}
