@@ -106,9 +106,9 @@ export default async function CategoriesPage({ params }: CategoriesPageProps) {
                                         <TableCell>
                                             {fieldSchema.length > 0 ? (
                                                 <div className="flex flex-wrap gap-1">
-                                                    {fieldSchema.slice(0, 3).map((field) => (
+                                                    {fieldSchema.slice(0, 3).map((field, idx) => (
                                                         <Badge
-                                                            key={field.key}
+                                                            key={`${category.id}-field-${idx}`}
                                                             variant="outline"
                                                             className="text-xs"
                                                         >

@@ -36,7 +36,7 @@ export function FieldBuilder({ value, onChange }: FieldBuilderProps) {
 
     const addField = () => {
         const newField: FieldDefinition = {
-            key: `field_${Date.now()}`,
+            key: `field_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             label: "",
             type: "text",
             required: false,
@@ -49,18 +49,8 @@ export function FieldBuilder({ value, onChange }: FieldBuilderProps) {
     const updateField = (index: number, updates: Partial<FieldDefinition>) => {
         const updated = fields.map((field, i) => {
             if (i === index) {
-                const newField = { ...field, ...updates };
-                // Auto-generate key from label if label changes
-                if (updates.label && !field.key.startsWith("field_")) {
-                    // Keep existing key
-                } else if (updates.label) {
-                    newField.key = updates.label
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]/g, "_")
-                        .replace(/_+/g, "_")
-                        .replace(/^_|_$/g, "");
-                }
-                return newField;
+                // Keep the original unique key, never replace it
+                return { ...field, ...updates };
             }
             return field;
         });
@@ -104,7 +94,7 @@ export function FieldBuilder({ value, onChange }: FieldBuilderProps) {
                 <div className="space-y-4">
                     {fields.map((field, index) => (
                         <div
-                            key={field.key}
+                            key={`field-${index}`}
                             className="rounded-lg border bg-zinc-50 p-4 dark:bg-zinc-900"
                         >
                             <div className="mb-3 flex items-center justify-between">

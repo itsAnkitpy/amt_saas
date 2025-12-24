@@ -145,6 +145,7 @@ export default function NewAssetPage({ params }: NewAssetPageProps) {
                             <Input
                                 id="name"
                                 name="name"
+                                autoComplete="off"
                                 placeholder="e.g., MacBook Pro 14-inch"
                                 required
                             />
@@ -154,6 +155,7 @@ export default function NewAssetPage({ params }: NewAssetPageProps) {
                             <Input
                                 id="serialNumber"
                                 name="serialNumber"
+                                autoComplete="off"
                                 placeholder="Device serial number"
                             />
                         </div>
@@ -162,6 +164,7 @@ export default function NewAssetPage({ params }: NewAssetPageProps) {
                             <Input
                                 id="assetTag"
                                 name="assetTag"
+                                autoComplete="off"
                                 placeholder="e.g., IT-0001"
                             />
                         </div>
@@ -197,6 +200,7 @@ export default function NewAssetPage({ params }: NewAssetPageProps) {
                             <Input
                                 id="location"
                                 name="location"
+                                autoComplete="off"
                                 placeholder="e.g., Office A, Desk 5"
                             />
                         </div>

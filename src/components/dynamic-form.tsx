@@ -40,9 +40,9 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
 
     return (
         <div className="space-y-4">
-            {fields.map((field) => (
-                <div key={field.key} className="space-y-1">
-                    <Label htmlFor={field.key}>
+            {fields.map((field, fieldIndex) => (
+                <div key={`dynfield-${field.key}-${fieldIndex}`} className="space-y-1">
+                    <Label htmlFor={`input-${field.key}`}>
                         {field.label}
                         {field.required && <span className="text-red-500"> *</span>}
                     </Label>
@@ -50,7 +50,9 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
                     {/* Text Input */}
                     {field.type === "text" && (
                         <Input
-                            id={field.key}
+                            id={`input-${field.key}`}
+                            name={field.key}
+                            autoComplete="off"
                             placeholder={field.placeholder}
                             value={(values[field.key] as string) || ""}
                             onChange={(e) => handleChange(field.key, e.target.value)}
@@ -61,7 +63,9 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
                     {/* Textarea */}
                     {field.type === "textarea" && (
                         <textarea
-                            id={field.key}
+                            id={`input-${field.key}`}
+                            name={field.key}
+                            autoComplete="off"
                             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
                             placeholder={field.placeholder}
                             rows={3}
@@ -74,8 +78,10 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
                     {/* Number Input */}
                     {field.type === "number" && (
                         <Input
-                            id={field.key}
+                            id={`input-${field.key}`}
+                            name={field.key}
                             type="number"
+                            autoComplete="off"
                             placeholder={field.placeholder}
                             value={(values[field.key] as string) || ""}
                             onChange={(e) => handleChange(field.key, e.target.value)}
@@ -94,8 +100,8 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
                                 <SelectValue placeholder={`Select ${field.label}`} />
                             </SelectTrigger>
                             <SelectContent>
-                                {field.options?.map((option) => (
-                                    <SelectItem key={option} value={option}>
+                                {field.options?.map((option, optIndex) => (
+                                    <SelectItem key={`${field.key}-opt-${optIndex}`} value={option}>
                                         {option}
                                     </SelectItem>
                                 ))}
@@ -106,8 +112,10 @@ export function DynamicForm({ fields, values, onChange }: DynamicFormProps) {
                     {/* Date Input */}
                     {field.type === "date" && (
                         <Input
-                            id={field.key}
+                            id={`input-${field.key}`}
+                            name={field.key}
                             type="date"
+                            autoComplete="off"
                             value={(values[field.key] as string) || ""}
                             onChange={(e) => handleChange(field.key, e.target.value)}
                             required={field.required}
@@ -148,7 +156,7 @@ export function DynamicDisplay({
 
     return (
         <div className="grid gap-4 md:grid-cols-2">
-            {fields.map((field) => {
+            {fields.map((field, fieldIndex) => {
                 const value = values[field.key];
                 let displayValue = "—";
 
@@ -161,7 +169,7 @@ export function DynamicDisplay({
                 }
 
                 return (
-                    <div key={field.key}>
+                    <div key={`display-${fieldIndex}`}>
                         <p className="text-sm text-zinc-500">{field.label}</p>
                         <p className="font-medium">{displayValue}</p>
                     </div>
