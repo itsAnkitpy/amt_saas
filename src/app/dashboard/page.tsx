@@ -4,6 +4,7 @@ import { UserButton } from "@clerk/nextjs";
 import { syncUser } from "@/lib/sync-user";
 import { db } from "@/lib/db";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardPage() {
     const clerkUser = await currentUser();
@@ -47,6 +48,7 @@ export default async function DashboardPage() {
                             My Workspace →
                         </Link>
                     )}
+                    <ThemeToggle />
                     <UserButton afterSwitchSessionUrl="/" />
                 </div>
             </header>

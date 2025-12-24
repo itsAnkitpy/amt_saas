@@ -1,6 +1,7 @@
 import { requireTenantAccess } from "@/lib/auth";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
     BoxIcon,
     LayoutDashboardIcon,
@@ -122,6 +123,7 @@ export default async function TenantLayout({
                         <span className="text-sm text-zinc-500">
                             {user.firstName} ({user.role})
                         </span>
+                        <ThemeToggle />
                         <UserButton afterSwitchSessionUrl="/" />
                     </div>
                 </header>

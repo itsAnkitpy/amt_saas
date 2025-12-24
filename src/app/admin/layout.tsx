@@ -1,6 +1,7 @@
 import { requireSuperAdmin } from "@/lib/auth";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
     BoxIcon,
     BuildingIcon,
@@ -84,6 +85,7 @@ export default async function AdminLayout({
                     <h1 className="text-lg font-semibold">Super Admin Panel</h1>
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-zinc-500">{user.email}</span>
+                        <ThemeToggle />
                         <UserButton afterSwitchSessionUrl="/" />
                     </div>
                 </header>
