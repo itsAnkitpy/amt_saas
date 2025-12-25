@@ -7,10 +7,9 @@ interface RouteParams {
 }
 
 /**
- * GET /api/tenants/[slug]/assets/lookup?q=...
+ * GET /api/tenants/[slug]/users
  * 
- * Lookup an asset by ID, serial number, or asset tag
- * Used by the scan page to quickly find assets
+ * Get all users for a tenant (for assignment dropdowns)
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
@@ -20,14 +19,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         }
 
         const { slug } = await params;
-        const searchParams = request.nextUrl.searchParams;
-        const query = searchParams.get('q');
 
-        if (!query || query.trim().length === 0) {
-            return NextResponse.json({ error: 'Query parameter "q" is required' }, { status: 400 });
-        }
-
-        // Get user from database (User.id = clerkUser.id)
+        // Get user from database
         const user = await db.user.findUnique({
             where: { id: clerkUser.id },
             select: { tenantId: true, isSuperAdmin: true },
@@ -52,43 +45,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
 
-        const trimmedQuery = query.trim();
-
-        // Build search conditions - handle nullable fields
-        const searchConditions = [
-            { id: trimmedQuery },
-            ...(trimmedQuery ? [{ serialNumber: trimmedQuery }] : []),
-            ...(trimmedQuery ? [{ assetTag: trimmedQuery }] : []),
-        ];
-
-        // Search by ID, serial number, or asset tag
-        const asset = await db.asset.findFirst({
+        // Get all active users for this tenant
+        const users = await db.user.findMany({
             where: {
                 tenantId: tenant.id,
-                OR: searchConditions,
+                isActive: true,
             },
             select: {
                 id: true,
-                name: true,
-                serialNumber: true,
-                assetTag: true,
-                status: true,
-                assignedTo: {
-                    select: {
-                        id: true,
-                        firstName: true,
-                        lastName: true,
-                        email: true,
-                    },
-                },
+                firstName: true,
+                lastName: true,
+                email: true,
             },
+            orderBy: { firstName: 'asc' },
         });
 
-        return NextResponse.json({ asset: asset || null });
+        return NextResponse.json(users);
     } catch (error) {
-        console.error('Asset lookup error:', error);
+        console.error('Users lookup error:', error);
         return NextResponse.json(
-            { error: 'Failed to lookup asset' },
+            { error: 'Failed to fetch users' },
             { status: 500 }
         );
     }
