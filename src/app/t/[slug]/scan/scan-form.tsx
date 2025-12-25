@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Search, Plus, ArrowRight, UserPlus, RotateCcw, X } from 'lucide-react';
+import { CameraScanner } from '@/components/camera-scanner';
 import { quickAssignAsset, quickUnassignAsset } from './actions';
 
 interface ScanFormProps {
@@ -197,6 +198,31 @@ export function ScanForm({ tenantSlug }: ScanFormProps) {
                         <Search className="h-5 w-5" />
                     )}
                 </Button>
+                <CameraScanner
+                    onScan={async (scannedValue) => {
+                        setQuery(scannedValue);
+                        // Immediately search with scanned value
+                        setStatus('searching');
+                        setResult(null);
+                        try {
+                            const response = await fetch(
+                                `/api/tenants/${tenantSlug}/assets/lookup?q=${encodeURIComponent(scannedValue)}`
+                            );
+                            const data = await response.json();
+                            if (data.asset) {
+                                setStatus('found');
+                                setResult({ found: true, asset: data.asset });
+                            } else {
+                                setStatus('not-found');
+                                setResult({ found: false });
+                            }
+                        } catch (error) {
+                            console.error('Lookup failed:', error);
+                            setStatus('not-found');
+                            setResult({ found: false });
+                        }
+                    }}
+                />
             </div>
 
             {/* Asset Found - Available */}
