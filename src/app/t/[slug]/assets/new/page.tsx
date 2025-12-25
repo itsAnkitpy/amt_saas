@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, use, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,9 @@ interface Category {
  */
 export default function NewAssetPage({ params }: NewAssetPageProps) {
     const { slug } = use(params);
+    const searchParams = useSearchParams();
+    const prefillSerial = searchParams.get('serial') || '';
+
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
@@ -156,8 +160,14 @@ export default function NewAssetPage({ params }: NewAssetPageProps) {
                                 id="serialNumber"
                                 name="serialNumber"
                                 autoComplete="off"
+                                defaultValue={prefillSerial}
                                 placeholder="Device serial number"
                             />
+                            {prefillSerial && (
+                                <p className="text-xs text-green-600">
+                                    Pre-filled from scan
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <Label htmlFor="assetTag">Asset Tag</Label>

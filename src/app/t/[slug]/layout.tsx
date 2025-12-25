@@ -6,6 +6,7 @@ import {
     BoxIcon,
     LayoutDashboardIcon,
     PackageIcon,
+    ScanIcon,
     UsersIcon,
     SettingsIcon,
 } from "lucide-react";
@@ -64,6 +65,15 @@ export default async function TenantLayout({
                             >
                                 <PackageIcon className="h-5 w-5" />
                                 Assets
+                            </Link>
+                        </li>
+                        <li>
+                            <Link
+                                href={`/t/${slug}/scan`}
+                                className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                                <ScanIcon className="h-5 w-5" />
+                                Scan
                             </Link>
                         </li>
                         {isAdmin && (

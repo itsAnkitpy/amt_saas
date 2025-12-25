@@ -5,6 +5,8 @@ import { requireTenantAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DynamicDisplay, FieldDefinition } from "@/components/dynamic-form";
+import { AssetQRCode } from "@/components/asset-qr-code";
+import { PrintLabelButton } from "@/components/print-label";
 import {
     ArrowLeftIcon,
     PencilIcon,
@@ -260,6 +262,31 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                         <p className="text-zinc-500">
                             Updated: {new Date(asset.updatedAt).toLocaleDateString()}
                         </p>
+                    </div>
+
+                    {/* QR Code */}
+                    <div className="rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                        <h3 className="mb-4 font-semibold">Asset QR Code</h3>
+                        <div className="flex flex-col items-center">
+                            <AssetQRCode assetId={asset.id} size={120} />
+                            <p className="mt-3 text-xs text-zinc-500 text-center">
+                                Scan to view this asset
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-400 font-mono">
+                                {asset.id}
+                            </p>
+                            <div className="mt-4">
+                                <PrintLabelButton
+                                    asset={{
+                                        id: asset.id,
+                                        name: asset.name,
+                                        serialNumber: asset.serialNumber,
+                                        assetTag: asset.assetTag,
+                                    }}
+                                    tenantName={tenant.name}
+                                />
+                            </div>
+                        </div>
                     </div>
 
                     {/* Delete */}
