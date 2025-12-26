@@ -52,9 +52,11 @@ export default function EditCategoryPage({ params }: EditCategoryPageProps) {
 
         formData.set("fieldSchema", JSON.stringify(fields));
 
-        const result = await updateCategory(slug, id, formData);
-        if (result?.error) {
-            setError(result.error);
+        try {
+            await updateCategory(slug, id, formData);
+            // If successful, redirect happens in server action
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to update category');
             setIsSubmitting(false);
         }
     };
@@ -63,9 +65,11 @@ export default function EditCategoryPage({ params }: EditCategoryPageProps) {
         if (!confirm("Are you sure you want to delete this category?")) return;
 
         setIsDeleting(true);
-        const result = await deleteCategory(slug, id);
-        if (result?.error) {
-            setError(result.error);
+        try {
+            await deleteCategory(slug, id);
+            // If successful, redirect happens in server action
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to delete category');
             setIsDeleting(false);
         }
     };

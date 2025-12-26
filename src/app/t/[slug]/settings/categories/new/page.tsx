@@ -29,12 +29,13 @@ export default function NewCategoryPage({ params }: NewCategoryPageProps) {
         // Add fields to form data
         formData.set("fieldSchema", JSON.stringify(fields));
 
-        const result = await createCategory(slug, formData);
-        if (result?.error) {
-            setError(result.error);
+        try {
+            await createCategory(slug, formData);
+            // If successful, redirect happens in server action
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to create category');
             setIsSubmitting(false);
         }
-        // If successful, redirect happens in server action
     };
 
     return (
