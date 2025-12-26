@@ -37,7 +37,8 @@ import {
     CheckCircleIcon,
     WrenchIcon,
     ArchiveIcon,
-    Loader2Icon
+    Loader2Icon,
+    DownloadIcon
 } from 'lucide-react';
 
 // Types for the asset data passed from server
@@ -175,6 +176,21 @@ export function AssetsTable({ assets, tenantSlug }: AssetsTableProps) {
         });
     };
 
+    // Handle CSV export (uses link click to avoid pop-up blockers)
+    const handleExport = (exportAll: boolean = false) => {
+        const url = exportAll
+            ? `/api/tenants/${tenantSlug}/assets/export`
+            : `/api/tenants/${tenantSlug}/assets/export?ids=${Array.from(selectedIds).join(',')}`;
+
+        // Create temporary link and click it to trigger download
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = ''; // Browser will use Content-Disposition filename
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // Handle confirmation
     const handleConfirm = async () => {
         if (!pendingAction) return;
@@ -243,6 +259,23 @@ export function AssetsTable({ assets, tenantSlug }: AssetsTableProps) {
                                     <DropdownMenuItem onClick={() => requestStatusChange('RETIRED')}>
                                         <ArchiveIcon className="mr-2 h-4 w-4 text-zinc-600" />
                                         Mark Retired
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" disabled={isLoading}>
+                                        <DownloadIcon className="mr-2 h-4 w-4" />
+                                        Export CSV
+                                        <ChevronDownIcon className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem onClick={() => handleExport(false)}>
+                                        Export Selected ({selectedIds.size})
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleExport(true)}>
+                                        Export All Assets
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
