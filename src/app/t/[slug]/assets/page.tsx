@@ -2,28 +2,13 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireTenantAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { PlusIcon, EyeIcon, SearchIcon, ImageIcon } from "lucide-react";
+import { AssetsTable } from "@/components/assets-table";
+import { PlusIcon, SearchIcon } from "lucide-react";
 
 interface AssetsPageProps {
     params: Promise<{ slug: string }>;
     searchParams: Promise<{ search?: string; status?: string; category?: string }>;
 }
-
-const statusColors: Record<string, string> = {
-    AVAILABLE: "bg-green-100 text-green-800",
-    ASSIGNED: "bg-blue-100 text-blue-800",
-    MAINTENANCE: "bg-yellow-100 text-yellow-800",
-    RETIRED: "bg-zinc-100 text-zinc-800",
-};
 
 /**
  * Asset List Page
@@ -51,7 +36,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     }
 
     // Fetch assets with primary image
-    const assets = await db.asset.findMany({
+    const assetsRaw = await db.asset.findMany({
         where,
         include: {
             category: true,
@@ -64,6 +49,12 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
         orderBy: { createdAt: "desc" },
         take: 50,
     });
+
+    // Serialize for client component (convert Decimal to number)
+    const assets = assetsRaw.map(asset => ({
+        ...asset,
+        purchasePrice: asset.purchasePrice ? Number(asset.purchasePrice) : null,
+    }));
 
     // Fetch categories for filter
     const categories = await db.assetCategory.findMany({
@@ -142,89 +133,11 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                 </Button>
             </form>
 
-            {/* Assets Table */}
-            <div className="mt-6 rounded-lg border bg-white dark:bg-zinc-950">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-16"></TableHead>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Serial / Tag</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Assigned To</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {assets.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={7} className="py-12 text-center">
-                                    <div className="text-zinc-500">
-                                        <p className="mb-2">No assets found</p>
-                                        <Link href={`/t/${slug}/assets/new`}>
-                                            <Button variant="outline" size="sm">
-                                                <PlusIcon className="mr-2 h-4 w-4" />
-                                                Add your first asset
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            assets.map((asset) => {
-                                const primaryImage = asset.images[0];
-                                return (
-                                    <TableRow key={asset.id}>
-                                        {/* Thumbnail */}
-                                        <TableCell className="w-16 py-2">
-                                            <div className="h-12 w-12 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-                                                {primaryImage ? (
-                                                    <img
-                                                        src={`/api/images/${primaryImage.id}/thumb`}
-                                                        alt={asset.name}
-                                                        className="h-full w-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <ImageIcon className="h-5 w-5 text-zinc-400" />
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="font-medium">{asset.name}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{asset.category.name}</Badge>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-zinc-500">
-                                            {asset.serialNumber || asset.assetTag || "—"}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge className={statusColors[asset.status]}>
-                                                {asset.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            {asset.assignedTo ? (
-                                                <span className="text-sm">
-                                                    {asset.assignedTo.firstName} {asset.assignedTo.lastName}
-                                                </span>
-                                            ) : (
-                                                <span className="text-zinc-400">—</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Link href={`/t/${slug}/assets/${asset.id}`}>
-                                                <Button variant="ghost" size="sm">
-                                                    <EyeIcon className="h-4 w-4" />
-                                                </Button>
-                                            </Link>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                </Table>
+            {/* Assets Table with Multi-Select */}
+            <div className="mt-6">
+                <AssetsTable assets={assets} tenantSlug={slug} />
             </div>
         </div>
     );
 }
+
