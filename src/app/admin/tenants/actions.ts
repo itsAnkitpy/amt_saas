@@ -19,7 +19,7 @@ export async function createTenant(formData: FormData) {
 
     // Validate inputs
     if (!name || !slug) {
-        return { error: "Name and slug are required" };
+        throw new Error("Name and slug are required");
     }
 
     // Check if slug already exists
@@ -28,7 +28,7 @@ export async function createTenant(formData: FormData) {
     });
 
     if (existingTenant) {
-        return { error: "A tenant with this slug already exists" };
+        throw new Error("A tenant with this slug already exists");
     }
 
     // Create tenant
@@ -61,7 +61,7 @@ export async function updateTenant(tenantId: string, formData: FormData) {
 
     // Validate inputs
     if (!name || !slug) {
-        return { error: "Name and slug are required" };
+        throw new Error("Name and slug are required");
     }
 
     // Check if slug already exists (for another tenant)
@@ -73,7 +73,7 @@ export async function updateTenant(tenantId: string, formData: FormData) {
     });
 
     if (existingTenant) {
-        return { error: "A tenant with this slug already exists" };
+        throw new Error("A tenant with this slug already exists");
     }
 
     // Update tenant

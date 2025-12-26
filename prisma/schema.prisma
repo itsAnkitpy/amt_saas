@@ -180,6 +180,9 @@ model Asset {
   
   // Assignment history
   assignments   AssetAssignment[]
+  
+  // Asset images
+  images        AssetImage[]
 
   @@unique([tenantId, serialNumber])
   @@unique([tenantId, assetTag])
@@ -211,6 +214,32 @@ model AssetAssignment {
   @@index([assetId])
   @@index([userId])
   @@map("asset_assignments")
+}
+
+// Asset images with private storage
+model AssetImage {
+  id          String   @id @default(cuid())
+  
+  // Asset relation
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  // File metadata
+  fileName    String   // Original filename from upload
+  filePath    String   // Storage path: "tenant-id/assets/asset-id/original-xxx.jpg"
+  thumbPath   String?  // Thumbnail path (optional)
+  mimeType    String   // "image/jpeg", "image/png", etc.
+  size        Int      // File size in bytes
+  
+  // Display
+  isPrimary   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  
+  // Metadata
+  createdAt   DateTime @default(now())
+  
+  @@index([assetId])
+  @@map("asset_images")
 }
 
 enum AssetStatus {

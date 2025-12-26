@@ -44,3 +44,7 @@ next-env.d.ts
 /PRD
 
 /src/generated/prisma
+
+# storage (uploaded files)
+/storage/uploads/*
+!/storage/uploads/.gitkeep

@@ -28,7 +28,7 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
     const fieldSchemaRaw = formData.get("fieldSchema") as string;
 
     if (!name) {
-        return { error: "Category name is required" };
+        throw new Error("Category name is required");
     }
 
     // Check if category already exists
@@ -37,7 +37,7 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
     });
 
     if (existing) {
-        return { error: "A category with this name already exists" };
+        throw new Error("A category with this name already exists");
     }
 
     // Parse and validate field schema
@@ -47,15 +47,15 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
             fieldSchema = JSON.parse(fieldSchemaRaw);
         }
     } catch {
-        return { error: "Invalid field schema format" };
+        throw new Error("Invalid field schema format");
     }
 
-    const category = await db.assetCategory.create({
+    await db.assetCategory.create({
         data: {
             name,
             description,
             icon,
-            fieldSchema: fieldSchema,
+            fieldSchema: fieldSchema as unknown as object,
             tenantId: tenant.id,
         },
     });
@@ -81,7 +81,7 @@ export async function updateCategory(
     const isActive = formData.get("isActive") === "true";
 
     if (!name) {
-        return { error: "Category name is required" };
+        throw new Error("Category name is required");
     }
 
     // Check if name already exists for another category
@@ -94,7 +94,7 @@ export async function updateCategory(
     });
 
     if (existing) {
-        return { error: "A category with this name already exists" };
+        throw new Error("A category with this name already exists");
     }
 
     let fieldSchema: FieldDefinition[] = [];
@@ -103,7 +103,7 @@ export async function updateCategory(
             fieldSchema = JSON.parse(fieldSchemaRaw);
         }
     } catch {
-        return { error: "Invalid field schema format" };
+        throw new Error("Invalid field schema format");
     }
 
     await db.assetCategory.update({
@@ -112,7 +112,7 @@ export async function updateCategory(
             name,
             description,
             icon,
-            fieldSchema: fieldSchema,
+            fieldSchema: fieldSchema as unknown as object,
             isActive,
         },
     });
@@ -133,7 +133,7 @@ export async function deleteCategory(tenantSlug: string, categoryId: string) {
     });
 
     if (assetCount > 0) {
-        return { error: `Cannot delete category with ${assetCount} assets. Move or delete assets first.` };
+        throw new Error(`Cannot delete category with ${assetCount} assets. Move or delete assets first.`);
     }
 
     await db.assetCategory.delete({

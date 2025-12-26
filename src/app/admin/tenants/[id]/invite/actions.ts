@@ -26,11 +26,11 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
     // Validate inputs
     if (!email || !firstName || !password) {
         console.error("Validation failed: missing required fields");
-        return { error: "Email, first name, and password are required" };
+        throw new Error("Email, first name, and password are required");
     }
 
     if (password.length < 8) {
-        return { error: "Password must be at least 8 characters" };
+        throw new Error("Password must be at least 8 characters");
     }
 
     // Verify tenant exists
@@ -39,7 +39,7 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
     });
 
     if (!tenant) {
-        return { error: "Tenant not found" };
+        throw new Error("Tenant not found");
     }
 
     // Check if user already exists in our DB for this tenant
@@ -51,7 +51,7 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
     });
 
     if (existingUser) {
-        return { error: "A user with this email already exists in this tenant" };
+        throw new Error("A user with this email already exists in this tenant");
     }
 
     let clerkUserId: string;
@@ -75,12 +75,10 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
             const clerkError = error as { errors: Array<{ message: string; code: string; longMessage?: string }> };
             const firstError = clerkError.errors[0];
             console.error("Clerk error details:", firstError);
-            return {
-                error: firstError?.longMessage || firstError?.message || "Failed to create user in Clerk"
-            };
+            throw new Error(firstError?.longMessage || firstError?.message || "Failed to create user in Clerk");
         }
 
-        return { error: "Failed to create user. Please try again." };
+        throw new Error("Failed to create user. Please try again.");
     }
 
     // Create user in our database (outside try-catch so redirect works)

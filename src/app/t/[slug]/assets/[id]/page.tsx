@@ -10,11 +10,12 @@ import { PrintLabelButton } from "@/components/print-label";
 import {
     ArrowLeftIcon,
     PencilIcon,
-    UserPlusIcon,
     UserMinusIcon,
     TrashIcon,
+    ImageIcon,
 } from "lucide-react";
 import { AssignmentModal } from "./assignment-modal";
+import { AssetImagesSection } from "./asset-images-section";
 import { deleteAsset } from "../actions";
 
 interface AssetDetailPageProps {
@@ -68,8 +69,8 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
         orderBy: { firstName: "asc" },
     });
 
-    const fieldSchema = asset.category.fieldSchema as FieldDefinition[];
-    const customFields = asset.customFields as Record<string, unknown>;
+    const fieldSchema = asset.category.fieldSchema as unknown as FieldDefinition[];
+    const customFields = asset.customFields as unknown as Record<string, unknown>;
     const isAdmin = user.role === "ADMIN" || user.isSuperAdmin;
 
     return (
@@ -125,8 +126,21 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                 )}
             </div>
 
+            {/* Asset Images - At the top for visual identification */}
+            <div className="mt-6 rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                <h3 className="mb-4 font-semibold flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Asset Images
+                </h3>
+                <AssetImagesSection
+                    tenantSlug={slug}
+                    assetId={asset.id}
+                    isAdmin={isAdmin}
+                />
+            </div>
+
             {/* Main Content Grid */}
-            <div className="mt-8 grid gap-6 lg:grid-cols-3">
+            <div className="mt-6 grid gap-6 lg:grid-cols-3">
                 {/* Left Column - Details */}
                 <div className="space-y-6 lg:col-span-2">
                     {/* Basic Info */}

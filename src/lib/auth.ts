@@ -107,3 +107,42 @@ export async function isSuperAdmin(): Promise<boolean> {
     const user = await getCurrentUser();
     return user?.isSuperAdmin ?? false;
 }
+
+/**
+ * API-friendly tenant access check.
+ * Returns error object instead of redirecting (suitable for API routes).
+ * Use this in API route handlers instead of requireTenantAccess.
+ *
+ * @param tenantSlug - The tenant slug to check access for
+ * @returns User and tenant on success, error object on failure
+ */
+export async function checkTenantAccessForApi(tenantSlug: string): Promise<
+    | { user: User; tenant: Tenant }
+    | { error: string; status: number }
+> {
+    const user = await getCurrentUserWithTenant();
+
+    if (!user) {
+        return { error: 'Unauthorized', status: 401 };
+    }
+
+    const tenant = await db.tenant.findUnique({
+        where: { slug: tenantSlug },
+    });
+
+    if (!tenant) {
+        return { error: 'Tenant not found', status: 404 };
+    }
+
+    // Superadmin can access any tenant
+    if (user.isSuperAdmin) {
+        return { user, tenant };
+    }
+
+    // Regular user must belong to this tenant
+    if (user.tenantId !== tenant.id) {
+        return { error: 'Access denied', status: 403 };
+    }
+
+    return { user, tenant };
+}
