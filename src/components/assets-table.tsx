@@ -38,8 +38,10 @@ import {
     WrenchIcon,
     ArchiveIcon,
     Loader2Icon,
-    DownloadIcon
+    DownloadIcon,
+    UploadIcon
 } from 'lucide-react';
+import { BulkImportModal } from '@/components/bulk-import-modal';
 
 // Types for the asset data passed from server
 interface AssetImage {
@@ -68,9 +70,16 @@ interface Asset {
     images: AssetImage[];
 }
 
+interface Category {
+    id: string;
+    name: string;
+    icon: string | null;
+}
+
 interface AssetsTableProps {
     assets: Asset[];
     tenantSlug: string;
+    categories: Category[];
 }
 
 // Pending action state for confirmation dialog
@@ -91,11 +100,12 @@ const statusColors: Record<string, string> = {
 /**
  * Assets Table with Multi-Select and Bulk Actions
  */
-export function AssetsTable({ assets, tenantSlug }: AssetsTableProps) {
+export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps) {
     const router = useRouter();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Selection handlers
     const toggleSelect = (id: string) => {
@@ -228,7 +238,26 @@ export function AssetsTable({ assets, tenantSlug }: AssetsTableProps) {
                 </AlertDialogContent>
             </AlertDialog>
 
+            {/* Import Modal */}
+            <BulkImportModal
+                tenantSlug={tenantSlug}
+                categories={categories}
+                open={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+            />
+
             <div className="space-y-4">
+                {/* Toolbar with Import button */}
+                <div className="flex justify-end">
+                    <Button
+                        variant="outline"
+                        onClick={() => setIsImportModalOpen(true)}
+                    >
+                        <UploadIcon className="mr-2 h-4 w-4" />
+                        Import Assets
+                    </Button>
+                </div>
+
                 {/* Floating Action Bar - shown when items selected */}
                 {selectedIds.size > 0 && (
                     <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm dark:bg-zinc-900">

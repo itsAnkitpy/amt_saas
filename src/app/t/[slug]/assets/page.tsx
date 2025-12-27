@@ -135,7 +135,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
 
             {/* Assets Table with Multi-Select */}
             <div className="mt-6">
-                <AssetsTable assets={assets} tenantSlug={slug} />
+                <AssetsTable assets={assets} tenantSlug={slug} categories={categories} />
             </div>
         </div>
     );
