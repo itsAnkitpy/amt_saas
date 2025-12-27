@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { AssignmentModal } from "./assignment-modal";
 import { AssetImagesSection } from "./asset-images-section";
+import { ActivityTimeline } from "@/components/activity-timeline";
 import { deleteAsset } from "../actions";
 
 interface AssetDetailPageProps {
@@ -266,6 +267,11 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                                 ))}
                             </div>
                         )}
+                    </div>
+
+                    {/* Activity Log */}
+                    <div className="rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                        <ActivityTimeline assetId={id} tenantSlug={slug} />
                     </div>
 
                     {/* Meta */}

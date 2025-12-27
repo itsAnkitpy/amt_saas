@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi } from '@/lib/auth';
+import { logAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { getStorage } from '@/lib/storage';
 
 interface RouteParams {
@@ -79,6 +80,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             storage.delete(image.filePath),
             image.thumbPath ? storage.delete(image.thumbPath) : Promise.resolve()
         ]);
+
+        // Log activity
+        await logAssetActivity({
+            action: 'IMAGE_REMOVED',
+            assetId,
+            userId: authResult.user.id,
+            userName: getUserDisplayName(authResult.user),
+            tenantId: tenant.id,
+            details: { fileName: image.fileName }
+        });
 
         return NextResponse.json({
             message: 'Image deleted successfully'

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi } from '@/lib/auth';
+import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { AssetStatus } from '@/generated/prisma';
 
 interface RouteParams {
@@ -95,6 +96,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     },
                     data: { status: data.status as AssetStatus }
                 });
+
+                // Log status change activity
+                await logBulkAssetActivity(
+                    'STATUS_CHANGED',
+                    assetIds,
+                    authResult.user.id,
+                    getUserDisplayName(authResult.user),
+                    tenant.id,
+                    { to: data.status }
+                );
                 break;
 
             case 'assign':
@@ -127,6 +138,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                         status: 'ASSIGNED'
                     }
                 });
+
+                // Log assign activity
+                await logBulkAssetActivity(
+                    'ASSIGNED',
+                    assetIds,
+                    authResult.user.id,
+                    getUserDisplayName(authResult.user),
+                    tenant.id,
+                    { assignedTo: `${assignee.firstName} ${assignee.lastName || ''}`.trim() }
+                );
                 break;
 
             case 'unassign':
@@ -140,6 +161,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                         status: 'AVAILABLE'
                     }
                 });
+
+                // Log unassign activity
+                await logBulkAssetActivity(
+                    'UNASSIGNED',
+                    assetIds,
+                    authResult.user.id,
+                    getUserDisplayName(authResult.user),
+                    tenant.id
+                );
                 break;
 
             case 'delete':
@@ -170,6 +200,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                         archivedAt: new Date()
                     }
                 });
+
+                // Log delete activity
+                await logBulkAssetActivity(
+                    'DELETED',
+                    assetIds,
+                    authResult.user.id,
+                    getUserDisplayName(authResult.user),
+                    tenant.id,
+                    { reason: 'bulk_delete' }
+                );
                 break;
 
             default:
@@ -178,9 +218,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     { status: 400 }
                 );
         }
-
-        // Audit log for bulk actions
-        console.log(`[AUDIT] Bulk ${action} by user ${authResult.user.id} on tenant ${tenant.slug}: ${result.count} assets affected. IDs: ${assetIds.slice(0, 5).join(', ')}${assetIds.length > 5 ? '...' : ''}`);
 
         return NextResponse.json({
             success: true,

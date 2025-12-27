@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi } from '@/lib/auth';
+import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { Prisma } from '@/generated/prisma';
 
 interface RouteParams {
@@ -126,8 +127,29 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             });
         });
 
-        // Audit log
-        console.log(`[AUDIT] Bulk import by user ${user.id} on tenant ${tenant.slug}: ${result.count} assets created in category ${category.name}`);
+        // Get created asset IDs for activity logging (query by unique fields)
+        const createdAssets = await db.asset.findMany({
+            where: {
+                tenantId: tenant.id,
+                categoryId,
+                name: { in: rows.map(r => r.name.trim()) }
+            },
+            select: { id: true },
+            orderBy: { createdAt: 'desc' },
+            take: result.count,
+        });
+
+        // Log activity for imported assets
+        if (createdAssets.length > 0) {
+            await logBulkAssetActivity(
+                'CREATED',
+                createdAssets.map(a => a.id),
+                user.id,
+                getUserDisplayName(user),
+                tenant.id,
+                { category: category.name, source: 'bulk_import' }
+            );
+        }
 
         return NextResponse.json({
             success: true,

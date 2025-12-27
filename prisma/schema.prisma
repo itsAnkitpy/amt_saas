@@ -184,6 +184,9 @@ model Asset {
   
   // Asset images
   images        AssetImage[]
+  
+  // Activity log
+  activities    AssetActivity[]
 
   @@unique([tenantId, serialNumber])
   @@unique([tenantId, assetTag])
@@ -255,4 +258,47 @@ enum AssetCondition {
   GOOD
   FAIR
   POOR
+}
+
+// ============================================
+// AUDIT TRAIL
+// ============================================
+
+// Asset activity log for audit trail
+model AssetActivity {
+  id          String         @id @default(cuid())
+  
+  // What happened
+  action      AssetAction
+  details     Json?          // Action-specific context + performedBy
+  
+  // To which asset
+  assetId     String
+  asset       Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  // By whom (historical reference, NO foreign key to survive user deletion)
+  userId      String
+  
+  // When
+  createdAt   DateTime       @default(now())
+  
+  // Tenant for isolation
+  tenantId    String
+  
+  @@index([assetId])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action])
+  @@map("asset_activities")
+}
+
+enum AssetAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  UNASSIGNED
+  STATUS_CHANGED
+  DELETED
+  RESTORED
+  IMAGE_ADDED
+  IMAGE_REMOVED
 }

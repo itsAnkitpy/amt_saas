@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi } from '@/lib/auth';
+import { logAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import {
     getStorage,
     IMAGE_CONFIG,
@@ -178,6 +179,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 isPrimary,
                 sortOrder: asset._count.images
             }
+        });
+
+        // Log activity
+        await logAssetActivity({
+            action: 'IMAGE_ADDED',
+            assetId,
+            userId: authResult.user.id,
+            userName: getUserDisplayName(authResult.user),
+            tenantId: tenant.id,
+            details: { fileName: file.name }
         });
 
         return NextResponse.json({
