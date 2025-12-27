@@ -1,15 +1,12 @@
 import { requireTenantAccess } from "@/lib/auth";
-import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AppSidebar } from "@/components/app-sidebar";
 import {
-    BoxIcon,
-    LayoutDashboardIcon,
-    PackageIcon,
-    ScanIcon,
-    UsersIcon,
-    SettingsIcon,
-} from "lucide-react";
+    SidebarProvider,
+    SidebarTrigger,
+    SidebarInset,
+} from "@/components/ui/sidebar";
 
 interface TenantLayoutProps {
     children: React.ReactNode;
@@ -34,103 +31,28 @@ export default async function TenantLayout({
     const isAdmin = user.role === "ADMIN" || user.isSuperAdmin;
 
     return (
-        <div className="flex min-h-screen">
+        <SidebarProvider>
             {/* Sidebar */}
-            <aside className="w-64 border-r bg-white dark:bg-zinc-950">
-                {/* Logo */}
-                <div className="flex h-16 items-center gap-2 border-b px-6">
-                    <BoxIcon className="h-6 w-6 text-violet-600" />
-                    <div>
-                        <span className="font-bold">{tenant.name}</span>
-                        <p className="text-xs text-zinc-500">{tenant.plan} Plan</p>
-                    </div>
-                </div>
+            <AppSidebar
+                slug={slug}
+                tenantName={tenant.name}
+                tenantPlan={tenant.plan}
+                isAdmin={isAdmin}
+                isSuperAdmin={user.isSuperAdmin}
+            />
 
-                {/* Navigation */}
-                <nav className="p-4">
-                    <ul className="space-y-2">
-                        <li>
-                            <Link
-                                href={`/t/${slug}/dashboard`}
-                                className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                            >
-                                <LayoutDashboardIcon className="h-5 w-5" />
-                                Dashboard
-                            </Link>
-                        </li>
-                        <li>
-                            <Link
-                                href={`/t/${slug}/assets`}
-                                className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                            >
-                                <PackageIcon className="h-5 w-5" />
-                                Assets
-                            </Link>
-                        </li>
-                        <li>
-                            <Link
-                                href={`/t/${slug}/scan`}
-                                className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                            >
-                                <ScanIcon className="h-5 w-5" />
-                                Scan
-                            </Link>
-                        </li>
-                        {isAdmin && (
-                            <>
-                                <li>
-                                    <Link
-                                        href={`/t/${slug}/users`}
-                                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                                    >
-                                        <UsersIcon className="h-5 w-5" />
-                                        Users
-                                    </Link>
-                                </li>
-                                <li>
-                                    <Link
-                                        href={`/t/${slug}/settings`}
-                                        className="flex items-center gap-3 rounded-lg px-3 py-2 text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800"
-                                    >
-                                        <SettingsIcon className="h-5 w-5" />
-                                        Settings
-                                    </Link>
-                                </li>
-                            </>
-                        )}
-                    </ul>
-                </nav>
-
-                {/* Superadmin Quick Link */}
-                {user.isSuperAdmin && (
-                    <div className="absolute bottom-16 w-64 border-t p-4">
-                        <Link
-                            href="/admin"
-                            className="block text-sm text-violet-600 hover:underline"
-                        >
-                            ← Back to Admin Panel
-                        </Link>
-                    </div>
-                )}
-
-                {/* Bottom Section */}
-                <div className="absolute bottom-0 w-64 border-t p-4">
-                    <Link
-                        href="/dashboard"
-                        className="block text-sm text-zinc-500 hover:text-zinc-900"
-                    >
-                        ← My Account
-                    </Link>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <div className="flex flex-1 flex-col">
+            {/* Main Content Area */}
+            <SidebarInset>
                 {/* Header */}
-                <header className="flex h-16 items-center justify-between border-b bg-white px-6 dark:bg-zinc-950">
-                    <h1 className="text-lg font-semibold">{tenant.name}</h1>
+                <header className="flex h-14 items-center justify-between border-b bg-background px-4">
+                    <div className="flex items-center gap-2">
+                        <SidebarTrigger />
+                        <span className="text-sm text-muted-foreground">
+                            {tenant.name}
+                        </span>
+                    </div>
                     <div className="flex items-center gap-4">
-                        <span className="text-sm text-zinc-500">
+                        <span className="text-sm text-muted-foreground">
                             {user.firstName} ({user.role})
                         </span>
                         <ThemeToggle />
@@ -138,11 +60,11 @@ export default async function TenantLayout({
                     </div>
                 </header>
 
-                {/* Page Content */}
-                <main className="flex-1 bg-zinc-50 p-6 dark:bg-zinc-900">
+                {/* Page Content with scroll */}
+                <main className="flex-1 overflow-auto bg-muted/40 p-6">
                     {children}
                 </main>
-            </div>
-        </div>
+            </SidebarInset>
+        </SidebarProvider>
     );
 }

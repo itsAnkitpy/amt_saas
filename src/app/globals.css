@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 /* Animation utilities can be customized later with tweakcn */
 
 @custom-variant dark (&:is(.dark *));
