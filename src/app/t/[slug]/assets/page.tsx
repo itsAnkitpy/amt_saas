@@ -20,21 +20,29 @@ interface AssetsPageProps {
         status?: string;
         category?: string;
         page?: string;
+        pageSize?: string;
     }>;
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+const DEFAULT_PAGE_SIZE = 10;
 
 /**
  * Asset List Page with Pagination
  */
 export default async function AssetsPage({ params, searchParams }: AssetsPageProps) {
     const { slug } = await params;
-    const { search, status, category, page } = await searchParams;
+    const { search, status, category, page, pageSize: pageSizeParam } = await searchParams;
     const { tenant } = await requireTenantAccess(slug);
 
+    // Parse and validate page size
+    const requestedPageSize = parseInt(pageSizeParam || String(DEFAULT_PAGE_SIZE), 10);
+    const pageSize = PAGE_SIZE_OPTIONS.includes(requestedPageSize as typeof PAGE_SIZE_OPTIONS[number])
+        ? requestedPageSize
+        : DEFAULT_PAGE_SIZE;
+
     const currentPage = Math.max(1, parseInt(page || "1", 10));
-    const skip = (currentPage - 1) * PAGE_SIZE;
+    const skip = (currentPage - 1) * pageSize;
 
     // Build where clause
     const where: Record<string, unknown> = { tenantId: tenant.id };
@@ -55,7 +63,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
 
     // Count total assets for pagination
     const totalAssets = await db.asset.count({ where });
-    const totalPages = Math.ceil(totalAssets / PAGE_SIZE);
+    const totalPages = Math.ceil(totalAssets / pageSize);
 
     // Fetch assets with pagination
     const assetsRaw = await db.asset.findMany({
@@ -70,7 +78,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
         },
         orderBy: { createdAt: "desc" },
         skip,
-        take: PAGE_SIZE,
+        take: pageSize,
     });
 
     // Serialize for client component (convert Decimal to number)
@@ -96,13 +104,14 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     const availableCount = stats.find((s) => s.status === "AVAILABLE")?._count || 0;
     const assignedCount = stats.find((s) => s.status === "ASSIGNED")?._count || 0;
 
-    // Build URL for pagination (preserve filters)
-    const buildPageUrl = (pageNum: number) => {
+    // Build URL for pagination (preserve filters and page size)
+    const buildPageUrl = (pageNum: number, newPageSize?: number) => {
         const params = new URLSearchParams();
         if (search) params.set("search", search);
         if (status) params.set("status", status);
         if (category) params.set("category", category);
         params.set("page", pageNum.toString());
+        params.set("pageSize", (newPageSize || pageSize).toString());
         return `/t/${slug}/assets?${params.toString()}`;
     };
 
@@ -184,11 +193,30 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
             </div>
 
             {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-between">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
                     <p className="text-sm text-muted-foreground">
-                        Showing {skip + 1}-{Math.min(skip + PAGE_SIZE, totalAssets)} of {totalAssets} assets
+                        Showing {skip + 1}-{Math.min(skip + pageSize, totalAssets)} of {totalAssets} assets
                     </p>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Show:</span>
+                        <div className="flex rounded-md border">
+                            {PAGE_SIZE_OPTIONS.map((size) => (
+                                <Link
+                                    key={size}
+                                    href={buildPageUrl(1, size)}
+                                    className={`px-3 py-1 text-sm transition-colors ${size === pageSize
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'hover:bg-muted'
+                                        } ${size !== PAGE_SIZE_OPTIONS[0] ? 'border-l' : ''}`}
+                                >
+                                    {size}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                {totalPages > 1 && (
                     <Pagination>
                         <PaginationContent>
                             {currentPage > 1 && (
@@ -215,8 +243,8 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                             )}
                         </PaginationContent>
                     </Pagination>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }
