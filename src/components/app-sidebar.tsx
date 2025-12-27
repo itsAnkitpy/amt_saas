@@ -10,6 +10,7 @@ import {
     UsersIcon,
     SettingsIcon,
     ChevronLeftIcon,
+    ActivityIcon,
 } from 'lucide-react';
 import {
     Sidebar,
@@ -60,6 +61,11 @@ export function AppSidebar({
     ];
 
     const adminItems = [
+        {
+            title: 'Activity',
+            href: `/t/${slug}/activity`,
+            icon: ActivityIcon,
+        },
         {
             title: 'Users',
             href: `/t/${slug}/users`,
