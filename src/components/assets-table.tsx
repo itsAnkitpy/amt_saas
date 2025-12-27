@@ -39,8 +39,25 @@ import {
     ArchiveIcon,
     Loader2Icon,
     DownloadIcon,
-    UploadIcon
+    UploadIcon,
+    UserPlusIcon,
+    UserMinusIcon,
+    TrashIcon
 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { BulkImportModal } from '@/components/bulk-import-modal';
 
 // Types for the asset data passed from server
@@ -76,10 +93,17 @@ interface Category {
     icon: string | null;
 }
 
+interface User {
+    id: string;
+    firstName: string;
+    lastName: string | null;
+}
+
 interface AssetsTableProps {
     assets: Asset[];
     tenantSlug: string;
     categories: Category[];
+    users: User[];
 }
 
 // Pending action state for confirmation dialog
@@ -100,12 +124,14 @@ const statusColors: Record<string, string> = {
 /**
  * Assets Table with Multi-Select and Bulk Actions
  */
-export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps) {
+export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTableProps) {
     const router = useRouter();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
 
     // Selection handlers
     const toggleSelect = (id: string) => {
@@ -186,6 +212,56 @@ export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps
         });
     };
 
+    // Request unassign confirmation
+    const requestUnassign = () => {
+        setPendingAction({
+            action: 'unassign',
+            title: 'Unassign Assets',
+            description: 'This will remove the assignment from the selected assets and mark them as available.'
+        });
+    };
+
+    // Request delete confirmation
+    const requestDelete = () => {
+        setPendingAction({
+            action: 'delete',
+            title: 'Delete Assets',
+            description: 'This will mark the selected assets as retired. Assigned assets cannot be deleted - unassign them first.'
+        });
+    };
+
+    // Handle bulk assign
+    const handleBulkAssign = async () => {
+        if (!selectedUserId) return;
+        setIsLoading(true);
+        try {
+            const response = await fetch(`/api/tenants/${tenantSlug}/assets/bulk`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'assign',
+                    assetIds: Array.from(selectedIds),
+                    data: { assignedToId: selectedUserId }
+                })
+            });
+
+            if (response.ok) {
+                setSelectedIds(new Set());
+                setIsAssignModalOpen(false);
+                setSelectedUserId('');
+                router.refresh();
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Assignment failed');
+            }
+        } catch (error) {
+            console.error('Bulk assign failed:', error);
+            alert('Failed to assign assets');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Handle CSV export (uses link click to avoid pop-up blockers)
     const handleExport = (exportAll: boolean = false) => {
         const url = exportAll
@@ -205,7 +281,11 @@ export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps
     const handleConfirm = async () => {
         if (!pendingAction) return;
 
-        await executeBulkAction(pendingAction.action, { status: pendingAction.status });
+        if (pendingAction.action === 'update_status') {
+            await executeBulkAction(pendingAction.action, { status: pendingAction.status });
+        } else {
+            await executeBulkAction(pendingAction.action);
+        }
         setPendingAction(null);
     };
 
@@ -245,6 +325,48 @@ export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps
                 open={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
             />
+
+            {/* Assign Modal */}
+            <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
+                setIsAssignModalOpen(open);
+                if (!open) setSelectedUserId('');
+            }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Assign {selectedIds.size} Asset{selectedIds.size > 1 ? 's' : ''}</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <label className="text-sm font-medium">Select User</label>
+                        <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                            <SelectTrigger className="mt-2">
+                                <SelectValue placeholder="Choose a user..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {users.map(user => (
+                                    <SelectItem key={user.id} value={user.id}>
+                                        {user.firstName} {user.lastName || ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsAssignModalOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleBulkAssign} disabled={!selectedUserId || isLoading}>
+                            {isLoading ? (
+                                <>
+                                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                                    Assigning...
+                                </>
+                            ) : (
+                                'Assign to User'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="space-y-4">
                 {/* Toolbar with Import button */}
@@ -291,6 +413,29 @@ export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
+
+                            {/* Assign Button */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isLoading}
+                                onClick={() => setIsAssignModalOpen(true)}
+                            >
+                                <UserPlusIcon className="mr-2 h-4 w-4" />
+                                Assign
+                            </Button>
+
+                            {/* Unassign Button */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isLoading}
+                                onClick={requestUnassign}
+                            >
+                                <UserMinusIcon className="mr-2 h-4 w-4" />
+                                Unassign
+                            </Button>
+
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="sm" disabled={isLoading}>
@@ -308,6 +453,18 @@ export function AssetsTable({ assets, tenantSlug, categories }: AssetsTableProps
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
+
+                            {/* Delete Button */}
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                disabled={isLoading}
+                                onClick={requestDelete}
+                            >
+                                <TrashIcon className="mr-2 h-4 w-4" />
+                                Delete
+                            </Button>
+
                             <Button
                                 variant="ghost"
                                 size="sm"

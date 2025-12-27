@@ -93,6 +93,17 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
         orderBy: { name: "asc" },
     });
 
+    // Fetch users for assignment
+    const users = await db.user.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { firstName: "asc" },
+        select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+        },
+    });
+
     // Stats
     const stats = await db.asset.groupBy({
         by: ["status"],
@@ -189,7 +200,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
 
             {/* Assets Table with Multi-Select */}
             <div className="mt-6">
-                <AssetsTable assets={assets} tenantSlug={slug} categories={categories} />
+                <AssetsTable assets={assets} tenantSlug={slug} categories={categories} users={users} />
             </div>
 
             {/* Pagination */}
@@ -206,8 +217,8 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                                     key={size}
                                     href={buildPageUrl(1, size)}
                                     className={`px-3 py-1 text-sm transition-colors ${size === pageSize
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'hover:bg-muted'
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'hover:bg-muted'
                                         } ${size !== PAGE_SIZE_OPTIONS[0] ? 'border-l' : ''}`}
                                 >
                                     {size}

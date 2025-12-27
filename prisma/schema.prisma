@@ -169,6 +169,7 @@ model Asset {
   // Metadata
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+  archivedAt    DateTime?      // Set when asset is soft-deleted (RETIRED)
   
   // Tenant relation
   tenantId      String

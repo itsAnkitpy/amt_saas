@@ -159,13 +159,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     );
                 }
 
-                // Soft delete by marking as RETIRED
+                // Soft delete by marking as RETIRED and setting archivedAt
                 result = await db.asset.updateMany({
                     where: {
                         id: { in: assetIds },
                         tenantId: tenant.id
                     },
-                    data: { status: 'RETIRED' }
+                    data: {
+                        status: 'RETIRED',
+                        archivedAt: new Date()
+                    }
                 });
                 break;
 
