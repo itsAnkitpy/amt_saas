@@ -126,6 +126,9 @@ export function CameraScanner({ onScan, onError }: CameraScannerProps) {
                                         handleScan(result);
                                     }}
                                     onError={handleError}
+                                    constraints={{
+                                        facingMode: 'environment', // Use back camera on mobile
+                                    }}
                                     formats={[
                                         'qr_code',
                                         'code_128',
