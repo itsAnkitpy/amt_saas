@@ -23,7 +23,17 @@ export function CameraScanner({ onScan, onError }: CameraScannerProps) {
         setIsOpen(true);
         setIsLoading(true);
         setError(null);
+
+        // Fallback: hide loading after 3 seconds if camera doesn't trigger ready
+        setTimeout(() => {
+            setIsLoading(false);
+        }, 3000);
     };
+
+    // Called when camera stream is ready
+    const handleCameraReady = useCallback(() => {
+        setIsLoading(false);
+    }, []);
 
     const handleClose = () => {
         setIsOpen(false);
