@@ -74,12 +74,25 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         });
 
         // Then delete files from storage
-        // Using allSettled so we don't fail if files are already missing
+        // Use blob URLs if available (cloud storage), otherwise use file paths (local storage)
         const storage = getStorage();
-        await Promise.allSettled([
-            storage.delete(image.filePath),
-            image.thumbPath ? storage.delete(image.thumbPath) : Promise.resolve()
-        ]);
+        const deletePromises = [];
+
+        // Delete original image
+        if (image.blobUrl) {
+            deletePromises.push(storage.delete(image.blobUrl));
+        } else {
+            deletePromises.push(storage.delete(image.filePath));
+        }
+
+        // Delete thumbnail
+        if (image.thumbBlobUrl) {
+            deletePromises.push(storage.delete(image.thumbBlobUrl));
+        } else if (image.thumbPath) {
+            deletePromises.push(storage.delete(image.thumbPath));
+        }
+
+        await Promise.allSettled(deletePromises);
 
         // Log activity
         await logAssetActivity({

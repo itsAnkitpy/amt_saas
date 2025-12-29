@@ -2,12 +2,13 @@
  * Storage Provider Factory
  * 
  * Returns the appropriate storage provider based on environment.
- * Currently only LocalStorageProvider is implemented.
- * Add S3StorageProvider when ready for production.
+ * - Vercel Blob: When BLOB_READ_WRITE_TOKEN is present (staging/production)
+ * - Local Storage: For local development
  */
 
 import type { StorageProvider } from './types';
 import { LocalStorageProvider } from './local';
+import { VercelBlobStorageProvider } from './vercel-blob';
 
 // Re-export types and utilities
 export type { StorageProvider } from './types';
@@ -24,6 +25,10 @@ let storageProvider: StorageProvider | null = null;
 /**
  * Get the storage provider instance
  * 
+ * Provider selection priority:
+ * 1. Vercel Blob (when BLOB_READ_WRITE_TOKEN is set)
+ * 2. Local Storage (default for development)
+ * 
  * Usage:
  * ```typescript
  * import { getStorage } from '@/lib/storage';
@@ -33,8 +38,14 @@ let storageProvider: StorageProvider | null = null;
  */
 export function getStorage(): StorageProvider {
     if (!storageProvider) {
-        // TODO: Check env for STORAGE_PROVIDER=s3 and return S3StorageProvider
-        storageProvider = new LocalStorageProvider();
+        if (process.env.BLOB_READ_WRITE_TOKEN) {
+            console.log('[Storage] Using Vercel Blob Storage');
+            storageProvider = new VercelBlobStorageProvider();
+        } else {
+            console.log('[Storage] Using Local Storage');
+            storageProvider = new LocalStorageProvider();
+        }
     }
     return storageProvider;
 }
+

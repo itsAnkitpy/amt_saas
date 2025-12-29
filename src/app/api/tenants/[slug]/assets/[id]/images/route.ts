@@ -158,11 +158,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // Generate thumbnail
         const thumbBuffer = await createThumbnail(buffer);
 
-        // Upload both files
-        await Promise.all([
+        // Upload both files - returns path for local, full URL for blob storage
+        const [originalUrl, thumbUrl] = await Promise.all([
             storage.upload(buffer, originalPath),
             storage.upload(thumbBuffer, thumbPath)
         ]);
+
+        // Check if URLs are blob URLs (start with http) or local paths
+        const isBlobStorage = originalUrl.startsWith('http');
 
         // Determine if this should be primary (first image)
         const isPrimary = asset._count.images === 0;
@@ -177,7 +180,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 mimeType: file.type,
                 size: file.size,
                 isPrimary,
-                sortOrder: asset._count.images
+                sortOrder: asset._count.images,
+                // Store blob URLs if using cloud storage
+                blobUrl: isBlobStorage ? originalUrl : null,
+                thumbBlobUrl: isBlobStorage ? thumbUrl : null,
             }
         });
 

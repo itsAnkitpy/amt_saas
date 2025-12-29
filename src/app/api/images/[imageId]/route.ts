@@ -60,7 +60,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        // Get file from storage
+        // If blob URL exists, redirect to CDN for faster delivery
+        if (image.blobUrl) {
+            return NextResponse.redirect(image.blobUrl);
+        }
+
+        // Get file from local storage
         const storage = getStorage();
         const buffer = await storage.getBuffer(image.filePath);
 

@@ -234,6 +234,8 @@ model AssetImage {
   thumbPath   String?  // Thumbnail path (optional)
   mimeType    String   // "image/jpeg", "image/png", etc.
   size        Int      // File size in bytes
+  blobUrl     String?  // Full Vercel Blob URL (null for local storage)
+  thumbBlobUrl String? // Thumbnail Blob URL (null for local storage)
   
   // Display
   isPrimary   Boolean  @default(false)

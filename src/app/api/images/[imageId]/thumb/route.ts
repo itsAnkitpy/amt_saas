@@ -57,7 +57,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        // Use thumbnail path if available, otherwise fall back to original
+        // If blob URL exists, redirect to CDN for faster delivery
+        if (image.thumbBlobUrl) {
+            return NextResponse.redirect(image.thumbBlobUrl);
+        }
+        // Fallback to original blob URL if no thumbnail blob
+        if (image.blobUrl && !image.thumbPath) {
+            return NextResponse.redirect(image.blobUrl);
+        }
+
+        // Use thumbnail path if available, otherwise fall back to original (local storage)
         const storage = getStorage();
         const filePath = image.thumbPath || image.filePath;
         const buffer = await storage.getBuffer(filePath);
