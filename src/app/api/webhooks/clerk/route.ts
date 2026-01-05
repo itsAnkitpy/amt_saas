@@ -78,6 +78,14 @@ export async function POST(req: Request) {
                 const { id, first_name, last_name, email_addresses } = evt.data;
                 const primaryEmail = email_addresses?.[0]?.email_address;
 
+                // Check if user exists before updating (defensive - handles edge case where user.created failed)
+                const existingUser = await db.user.findUnique({ where: { id } });
+
+                if (!existingUser) {
+                    console.warn(`user.updated webhook for non-existent user: ${id}. Skipping update.`);
+                    return new Response("User not found, skipping update", { status: 200 });
+                }
+
                 // Update user in our database
                 await db.user.update({
                     where: { id: id },
