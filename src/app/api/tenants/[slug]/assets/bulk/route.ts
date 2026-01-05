@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
+import { handleApiError, badRequest, notFound } from '@/lib/api-error';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { AssetStatus } from '@/generated/prisma';
 
@@ -60,18 +61,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         // Validate request
         if (!action || !assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
-            return NextResponse.json(
-                { error: 'Invalid request: action and assetIds are required' },
-                { status: 400 }
-            );
+            throw badRequest('action and assetIds are required');
         }
 
         // Limit bulk operations
         if (assetIds.length > 1000) {
-            return NextResponse.json(
-                { error: 'Cannot process more than 1000 assets at once' },
-                { status: 400 }
-            );
+            throw badRequest('Cannot process more than 1000 assets at once');
         }
 
         // Verify all assets belong to this tenant
@@ -83,10 +78,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         });
 
         if (assetCount !== assetIds.length) {
-            return NextResponse.json(
-                { error: 'Some assets not found or do not belong to this tenant' },
-                { status: 404 }
-            );
+            throw notFound('Some assets not found or do not belong to this tenant');
         }
 
         let result: { count: number };
@@ -94,10 +86,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         switch (action) {
             case 'update_status':
                 if (!data?.status || !VALID_STATUSES.includes(data.status)) {
-                    return NextResponse.json(
-                        { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` },
-                        { status: 400 }
-                    );
+                    throw badRequest(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
                 }
 
                 result = await db.asset.updateMany({
@@ -237,11 +226,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         });
 
     } catch (error) {
-        console.error('Bulk action error:', error);
-        const message = error instanceof Error ? error.message : 'Failed to perform bulk action';
-        return NextResponse.json(
-            { error: message },
-            { status: 500 }
-        );
+        return handleApiError(error);
     }
 }

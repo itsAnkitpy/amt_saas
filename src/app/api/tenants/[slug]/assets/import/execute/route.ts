@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
+import { handleApiError, badRequest } from '@/lib/api-error';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { Prisma } from '@/generated/prisma';
 
@@ -76,24 +77,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const { categoryId, rows } = body as { categoryId: string; rows: ImportRow[] };
 
         if (!categoryId) {
-            return NextResponse.json(
-                { error: 'categoryId is required' },
-                { status: 400 }
-            );
+            throw badRequest('categoryId is required');
         }
 
         if (!rows || !Array.isArray(rows) || rows.length === 0) {
-            return NextResponse.json(
-                { error: 'rows array is required and must not be empty' },
-                { status: 400 }
-            );
+            throw badRequest('rows array is required and must not be empty');
         }
 
         if (rows.length > MAX_ROWS) {
-            return NextResponse.json(
-                { error: `Maximum ${MAX_ROWS} rows allowed per import` },
-                { status: 400 }
-            );
+            throw badRequest(`Maximum ${MAX_ROWS} rows allowed per import`);
         }
 
         // Fetch category with field schema
@@ -169,11 +161,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         });
 
     } catch (error) {
-        console.error('Import execute error:', error);
-        return NextResponse.json(
-            { error: 'Failed to import assets' },
-            { status: 500 }
-        );
+        return handleApiError(error);
     }
 }
 
