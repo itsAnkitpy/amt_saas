@@ -195,16 +195,11 @@ export default async function Home() {
                 <Button>Dashboard <ChevronRight className="ml-1 h-4 w-4" /></Button>
               </Link>
             ) : (
-              <>
-                <Link href="/sign-in" className="hidden sm:block text-sm font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+              <Link href="/sign-in">
+                <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
                   Sign In
-                </Link>
-                <Link href="/sign-up">
-                  <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
-                    Get Started Free
-                  </Button>
-                </Link>
-              </>
+                </Button>
+              </Link>
             )}
           </div>
         </Container>
@@ -233,14 +228,14 @@ export default async function Home() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <Link href="/sign-up" className="w-full sm:w-auto">
+              <Link href="#contact" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full h-14 px-8 text-lg bg-violet-600 hover:bg-violet-700 shadow-xl shadow-violet-500/20">
-                  Start Free Trial <ArrowRight className="ml-2 h-5 w-5" />
+                  Request a Demo <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="#demo" className="w-full sm:w-auto">
+              <Link href="/sign-in" className="w-full sm:w-auto">
                 <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
-                  Watch Demo
+                  Sign In
                 </Button>
               </Link>
             </div>
@@ -449,14 +444,14 @@ export default async function Home() {
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-              <Link href="/sign-up" className="w-full sm:w-auto">
+              <Link href="#contact" className="w-full sm:w-auto">
                 <Button size="lg" className="w-full h-14 px-8 text-lg bg-white text-zinc-950 hover:bg-zinc-100 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200">
-                  Start Free 14-Day Trial
+                  Request a Demo
                 </Button>
               </Link>
-              <Link href="/contact" className="w-full sm:w-auto">
+              <Link href="/sign-in" className="w-full sm:w-auto">
                 <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-700 text-white hover:bg-zinc-800 hover:text-white dark:border-zinc-700">
-                  Schedule a Demo
+                  Sign In
                 </Button>
               </Link>
             </div>

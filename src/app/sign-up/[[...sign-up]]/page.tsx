@@ -1,9 +1,10 @@
-import { SignUp } from "@clerk/nextjs";
+import { redirect } from "next/navigation";
 
+/**
+ * Sign Up page is disabled.
+ * Users are created by SuperAdmin/Tenant Admin via invite.
+ * Redirect to sign-in page.
+ */
 export default function SignUpPage() {
-    return (
-        <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-            <SignUp />
-        </div>
-    );
+    redirect("/sign-in");
 }
