@@ -146,3 +146,62 @@ export async function checkTenantAccessForApi(tenantSlug: string): Promise<
 
     return { user, tenant };
 }
+
+// ============================================
+// ROLE-BASED ACCESS CONTROL (RBAC)
+// ============================================
+
+/**
+ * Role hierarchy for permission checks.
+ * Higher number = more permissions.
+ */
+export const ROLE_HIERARCHY = {
+    SUPER_ADMIN: 4,
+    ADMIN: 3,
+    MANAGER: 2,
+    USER: 1,
+} as const;
+
+export type RoleLevel = keyof typeof ROLE_HIERARCHY;
+
+/**
+ * Check if user has the required role level or higher.
+ * SuperAdmins always pass.
+ *
+ * @param user - The user to check
+ * @param requiredRole - Minimum role required
+ * @returns true if user has sufficient permissions
+ */
+export function hasRole(
+    user: { role: string; isSuperAdmin: boolean },
+    requiredRole: RoleLevel
+): boolean {
+    // SuperAdmin bypasses all role checks
+    if (user.isSuperAdmin) return true;
+
+    const userLevel = ROLE_HIERARCHY[user.role as RoleLevel] || 0;
+    const requiredLevel = ROLE_HIERARCHY[requiredRole];
+
+    return userLevel >= requiredLevel;
+}
+
+/**
+ * API guard - returns error response if user lacks required role.
+ * Use in API routes after checkTenantAccessForApi.
+ *
+ * @param user - The user to check
+ * @param requiredRole - Minimum role required
+ * @returns null if allowed, error object if denied
+ */
+export function requireRole(
+    user: { role: string; isSuperAdmin: boolean },
+    requiredRole: RoleLevel
+): { error: string; status: number } | null {
+    if (!hasRole(user, requiredRole)) {
+        return {
+            error: `This action requires ${requiredRole} role or higher`,
+            status: 403,
+        };
+    }
+    return null;
+}

@@ -2,6 +2,7 @@ import { requireTenantAccess } from "@/lib/auth";
 import { UserButton } from "@clerk/nextjs";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppSidebar } from "@/components/app-sidebar";
+import { Toaster } from "@/components/ui/sonner";
 import {
     SidebarProvider,
     SidebarTrigger,
@@ -65,6 +66,7 @@ export default async function TenantLayout({
                     {children}
                 </main>
             </SidebarInset>
+            <Toaster position="top-right" richColors />
         </SidebarProvider>
     );
 }

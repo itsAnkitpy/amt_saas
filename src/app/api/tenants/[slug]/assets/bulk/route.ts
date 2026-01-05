@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { checkTenantAccessForApi } from '@/lib/auth';
+import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { AssetStatus } from '@/generated/prisma';
 
@@ -30,6 +30,7 @@ const VALID_STATUSES = ['AVAILABLE', 'ASSIGNED', 'MAINTENANCE', 'RETIRED'];
 /**
  * POST /api/tenants/[slug]/assets/bulk
  * Perform bulk operations on assets
+ * Requires: MANAGER role or higher
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
     try {
@@ -43,7 +44,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { tenant } = authResult;
+        const { user, tenant } = authResult;
+
+        // RBAC: Require MANAGER role for bulk operations
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
+
         const body: BulkActionRequest = await request.json();
         const { action, assetIds, data } = body;
 
@@ -227,8 +238,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     } catch (error) {
         console.error('Bulk action error:', error);
+        const message = error instanceof Error ? error.message : 'Failed to perform bulk action';
         return NextResponse.json(
-            { error: 'Failed to perform bulk action' },
+            { error: message },
             { status: 500 }
         );
     }

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireTenantAccess } from "@/lib/auth";
+import { requireTenantAccess, hasRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -18,9 +18,15 @@ export interface FieldDefinition {
 
 /**
  * Create a new asset category
+ * Requires: ADMIN role
  */
 export async function createCategory(tenantSlug: string, formData: FormData) {
-    const { tenant } = await requireTenantAccess(tenantSlug);
+    const { user, tenant } = await requireTenantAccess(tenantSlug);
+
+    // RBAC: Require ADMIN role for category management
+    if (!hasRole(user, 'ADMIN')) {
+        throw new Error("You need ADMIN role to manage categories");
+    }
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string | null;
@@ -66,13 +72,19 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
 
 /**
  * Update an existing category
+ * Requires: ADMIN role
  */
 export async function updateCategory(
     tenantSlug: string,
     categoryId: string,
     formData: FormData
 ) {
-    const { tenant } = await requireTenantAccess(tenantSlug);
+    const { user, tenant } = await requireTenantAccess(tenantSlug);
+
+    // RBAC: Require ADMIN role for category management
+    if (!hasRole(user, 'ADMIN')) {
+        throw new Error("You need ADMIN role to manage categories");
+    }
 
     const name = formData.get("name") as string;
     const description = formData.get("description") as string | null;
@@ -123,9 +135,15 @@ export async function updateCategory(
 
 /**
  * Delete a category
+ * Requires: ADMIN role
  */
 export async function deleteCategory(tenantSlug: string, categoryId: string) {
-    await requireTenantAccess(tenantSlug);
+    const { user } = await requireTenantAccess(tenantSlug);
+
+    // RBAC: Require ADMIN role for category management
+    if (!hasRole(user, 'ADMIN')) {
+        throw new Error("You need ADMIN role to manage categories");
+    }
 
     // Check if category has assets
     const assetCount = await db.asset.count({

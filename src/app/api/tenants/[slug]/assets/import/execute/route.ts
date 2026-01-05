@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { checkTenantAccessForApi } from '@/lib/auth';
+import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { Prisma } from '@/generated/prisma';
 
@@ -43,6 +43,7 @@ const MAX_ROWS = 1000;
 /**
  * POST /api/tenants/[slug]/assets/import/execute
  * Create assets from validated import data
+ * Requires: MANAGER role or higher
  * 
  * Body: JSON with:
  * - categoryId: category ID
@@ -61,6 +62,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         }
 
         const { user, tenant } = authResult;
+
+        // RBAC: Require MANAGER role for bulk import
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
+
         const body = await request.json();
         const { categoryId, rows } = body as { categoryId: string; rows: ImportRow[] };
 

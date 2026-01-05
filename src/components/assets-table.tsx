@@ -59,6 +59,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { BulkImportModal } from '@/components/bulk-import-modal';
+import { toast } from 'sonner';
 
 // Types for the asset data passed from server
 interface AssetImage {
@@ -174,15 +175,17 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
             });
 
             if (response.ok) {
+                const result = await response.json();
                 setSelectedIds(new Set());
+                toast.success(`Successfully updated ${result.count} asset(s)`);
                 router.refresh();
             } else {
                 const error = await response.json();
-                alert(error.error || 'Action failed');
+                toast.error(error.error || 'Action failed');
             }
         } catch (error) {
             console.error('Bulk action failed:', error);
-            alert('Failed to perform action');
+            toast.error('Failed to perform action. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -246,17 +249,19 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
             });
 
             if (response.ok) {
+                const result = await response.json();
                 setSelectedIds(new Set());
                 setIsAssignModalOpen(false);
                 setSelectedUserId('');
+                toast.success(`Successfully assigned ${result.count} asset(s)`);
                 router.refresh();
             } else {
                 const error = await response.json();
-                alert(error.error || 'Assignment failed');
+                toast.error(error.error || 'Assignment failed');
             }
         } catch (error) {
             console.error('Bulk assign failed:', error);
-            alert('Failed to assign assets');
+            toast.error('Failed to assign assets. Please try again.');
         } finally {
             setIsLoading(false);
         }
