@@ -2,31 +2,6 @@ import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 
 /**
- * Ensures a default tenant exists for development.
- * In production, tenants would be created during onboarding.
- */
-async function ensureDefaultTenant() {
-    const defaultTenantId = "default";
-
-    let tenant = await db.tenant.findUnique({
-        where: { id: defaultTenantId },
-    });
-
-    if (!tenant) {
-        tenant = await db.tenant.create({
-            data: {
-                id: defaultTenantId,
-                name: "Default Organization",
-                slug: "default",
-            },
-        });
-        console.log("Created default tenant for development");
-    }
-
-    return tenant;
-}
-
-/**
  * Syncs the current Clerk user to our PostgreSQL database.
  * Returns existing user (including superadmin) or creates new regular user.
  *
@@ -47,7 +22,7 @@ export async function syncUser() {
     }
 
     // Try to find existing user (could be superadmin or regular user)
-    let dbUser = await db.user.findUnique({
+    const dbUser = await db.user.findUnique({
         where: { id: clerkUser.id },
     });
 
@@ -56,31 +31,13 @@ export async function syncUser() {
         return dbUser;
     }
 
-    // User doesn't exist - create as regular user
-    // (Superadmin should already be seeded)
-    try {
-        // Ensure default tenant exists first
-        await ensureDefaultTenant();
-
-        dbUser = await db.user.create({
-            data: {
-                id: clerkUser.id,
-                email: primaryEmail,
-                firstName: clerkUser.firstName || "User",
-                lastName: clerkUser.lastName || null,
-                tenantId: "default", // Regular users get default tenant
-            },
-        });
-        console.log(`Synced new user to database: ${clerkUser.id}`);
-    } catch (error) {
-        // Handle race condition or other errors
-        console.error("Error creating user:", error);
-        dbUser = await db.user.findUnique({
-            where: { id: clerkUser.id },
-        });
-    }
-
-    return dbUser;
+    // User doesn't exist in DB
+    // In admin-only mode, users must be pre-created by superadmin
+    console.warn(
+        `[syncUser] User ${clerkUser.id} (${primaryEmail}) not found in DB. ` +
+        `In admin-only mode, superadmin must create users first.`
+    );
+    return null;
 }
 
 /**

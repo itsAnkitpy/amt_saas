@@ -51,26 +51,16 @@ export async function POST(req: Request) {
     try {
         switch (eventType) {
             case "user.created": {
-                const { id, email_addresses, first_name, last_name } = evt.data;
+                // Admin-only mode: Skip auto-creation of users
+                // Users must be pre-created by superadmin via the admin panel
+                // This prevents unmanaged signups from getting database access
+                const { id, email_addresses } = evt.data;
                 const primaryEmail = email_addresses?.[0]?.email_address;
 
-                if (!primaryEmail) {
-                    console.error("No email address found for user:", id);
-                    return new Response("No email address", { status: 400 });
-                }
-
-                // Create user in our database
-                await db.user.create({
-                    data: {
-                        id: id, // Use Clerk's ID as our user ID
-                        email: primaryEmail,
-                        firstName: first_name || "User",
-                        lastName: last_name || null,
-                        tenantId: "default", // TODO: Handle tenant assignment in onboarding
-                    },
-                });
-
-                console.log(`Created user: ${id} (${primaryEmail})`);
+                console.log(
+                    `[Webhook] user.created for ${id} (${primaryEmail}) - ` +
+                    `Skipping auto-creation. Admin must add users via admin panel.`
+                );
                 break;
             }
 
