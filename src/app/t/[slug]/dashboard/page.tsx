@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { requireTenantAccess } from "@/lib/auth";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { StatusChart } from "@/components/dashboard/status-chart";
+import { CategoryChart } from "@/components/dashboard/category-chart";
+import { ConditionChart } from "@/components/dashboard/condition-chart";
 import Link from "next/link";
 
 interface TenantDashboardPageProps {
@@ -30,7 +33,7 @@ export default async function TenantDashboardPage({
     const { slug } = await params;
     const { user, tenant } = await requireTenantAccess(slug);
 
-    // Get all stats in parallel for performance
+    // Get all stats and chart data in parallel for performance
     const [
         userCount,
         totalAssets,
@@ -38,6 +41,9 @@ export default async function TenantDashboardPage({
         assignedCount,
         maintenanceCount,
         totalValueResult,
+        statusDistribution,
+        categoryBreakdown,
+        conditionDistribution,
     ] = await Promise.all([
         db.user.count({ where: { tenantId: tenant.id } }),
         db.asset.count({ where: { tenantId: tenant.id } }),
@@ -48,9 +54,53 @@ export default async function TenantDashboardPage({
             where: { tenantId: tenant.id },
             _sum: { purchasePrice: true },
         }),
+        // Status distribution for chart
+        db.asset.groupBy({
+            by: ["status"],
+            where: { tenantId: tenant.id },
+            _count: { status: true },
+        }),
+        // Category breakdown for chart
+        db.asset.groupBy({
+            by: ["categoryId"],
+            where: { tenantId: tenant.id },
+            _count: { categoryId: true },
+        }),
+        // Condition distribution for chart
+        db.asset.groupBy({
+            by: ["condition"],
+            where: { tenantId: tenant.id },
+            _count: { condition: true },
+        }),
     ]);
 
+    // Fetch category names for the breakdown
+    const categoryIds = categoryBreakdown.map((c) => c.categoryId);
+    const categories = await db.assetCategory.findMany({
+        where: { id: { in: categoryIds } },
+        select: { id: true, name: true },
+    });
+    const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
+
     const totalValue = totalValueResult._sum.purchasePrice?.toNumber() ?? 0;
+
+    // Transform data for charts
+    const statusData = statusDistribution.map((item) => ({
+        status: item.status,
+        count: item._count.status,
+    }));
+
+    const categoryData = categoryBreakdown
+        .map((item) => ({
+            name: categoryMap.get(item.categoryId) || "Unknown",
+            count: item._count.categoryId,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+    const conditionData = conditionDistribution.map((item) => ({
+        condition: item.condition,
+        count: item._count.condition,
+    }));
 
     return (
         <div>
@@ -99,26 +149,32 @@ export default async function TenantDashboardPage({
                 />
             </div>
 
-            {/* Charts Section - Coming in Phase 2 */}
+            {/* Charts Section */}
             <div className="mt-8 grid gap-6 lg:grid-cols-2">
-                {/* Placeholder for Status Chart */}
+                {/* Status Distribution Chart */}
                 <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
                     <h3 className="font-semibold text-zinc-900 dark:text-white">
                         Status Distribution
                     </h3>
-                    <p className="mt-2 text-sm text-zinc-500">
-                        Chart coming in Phase 2
-                    </p>
+                    <StatusChart data={statusData} />
                 </div>
 
-                {/* Placeholder for Category Chart */}
+                {/* Assets by Category Chart */}
                 <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
                     <h3 className="font-semibold text-zinc-900 dark:text-white">
                         Assets by Category
                     </h3>
-                    <p className="mt-2 text-sm text-zinc-500">
-                        Chart coming in Phase 2
-                    </p>
+                    <CategoryChart data={categoryData} />
+                </div>
+            </div>
+
+            {/* Condition Health Section */}
+            <div className="mt-6">
+                <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="font-semibold text-zinc-900 dark:text-white">
+                        Condition Health
+                    </h3>
+                    <ConditionChart data={conditionData} />
                 </div>
             </div>
 
