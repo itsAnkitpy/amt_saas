@@ -1,13 +1,28 @@
 import { db } from "@/lib/db";
 import { requireTenantAccess } from "@/lib/auth";
+import { StatCard } from "@/components/dashboard/stat-card";
+import Link from "next/link";
 
 interface TenantDashboardPageProps {
     params: Promise<{ slug: string }>;
 }
 
 /**
+ * Format currency for display
+ */
+function formatCurrency(value: number): string {
+    if (value >= 1000000) {
+        return `$${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+        return `$${(value / 1000).toFixed(0)}K`;
+    }
+    return `$${value.toFixed(0)}`;
+}
+
+/**
  * Tenant Dashboard Page
- * Shows overview stats for the tenant
+ * Shows overview stats and analytics for the tenant
  */
 export default async function TenantDashboardPage({
     params,
@@ -15,49 +30,94 @@ export default async function TenantDashboardPage({
     const { slug } = await params;
     const { user, tenant } = await requireTenantAccess(slug);
 
-    // Get stats for this tenant
-    const [userCount, assetCount, availableAssets, assignedAssets] =
-        await Promise.all([
-            db.user.count({ where: { tenantId: tenant.id } }),
-            db.asset.count({ where: { tenantId: tenant.id } }),
-            db.asset.count({ where: { tenantId: tenant.id, status: "AVAILABLE" } }),
-            db.asset.count({ where: { tenantId: tenant.id, status: "ASSIGNED" } }),
-        ]);
+    // Get all stats in parallel for performance
+    const [
+        userCount,
+        totalAssets,
+        availableCount,
+        assignedCount,
+        maintenanceCount,
+        totalValueResult,
+    ] = await Promise.all([
+        db.user.count({ where: { tenantId: tenant.id } }),
+        db.asset.count({ where: { tenantId: tenant.id } }),
+        db.asset.count({ where: { tenantId: tenant.id, status: "AVAILABLE" } }),
+        db.asset.count({ where: { tenantId: tenant.id, status: "ASSIGNED" } }),
+        db.asset.count({ where: { tenantId: tenant.id, status: "MAINTENANCE" } }),
+        db.asset.aggregate({
+            where: { tenantId: tenant.id },
+            _sum: { purchasePrice: true },
+        }),
+    ]);
+
+    const totalValue = totalValueResult._sum.purchasePrice?.toNumber() ?? 0;
 
     return (
         <div>
             <h2 className="text-2xl font-bold">Dashboard</h2>
-            <p className="mt-2 text-zinc-600">
+            <p className="mt-2 text-zinc-600 dark:text-zinc-400">
                 Welcome back, {user.firstName}! Here&apos;s an overview of {tenant.name}.
             </p>
 
-            {/* Stats Grid */}
-            <div className="mt-8 grid gap-6 md:grid-cols-4">
-                {/* Users Card */}
-                <div className="rounded-lg border bg-white p-6 shadow-sm dark:bg-zinc-950">
-                    <p className="text-sm font-medium text-zinc-500">Team Members</p>
-                    <p className="mt-2 text-4xl font-bold text-violet-600">{userCount}</p>
-                </div>
+            {/* Primary Stats Grid */}
+            <div className="mt-8 grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+                <StatCard
+                    title="Total Assets"
+                    value={totalAssets}
+                    iconName="package"
+                    color="default"
+                />
+                <StatCard
+                    title="Available"
+                    value={availableCount}
+                    iconName="check-circle"
+                    color="green"
+                />
+                <StatCard
+                    title="Assigned"
+                    value={assignedCount}
+                    iconName="user-check"
+                    color="blue"
+                />
+                <StatCard
+                    title="Maintenance"
+                    value={maintenanceCount}
+                    iconName="wrench"
+                    color="amber"
+                />
+                <StatCard
+                    title="Total Value"
+                    value={formatCurrency(totalValue)}
+                    iconName="dollar-sign"
+                    color="violet"
+                />
+                <StatCard
+                    title="Team Members"
+                    value={userCount}
+                    iconName="users"
+                    color="default"
+                />
+            </div>
 
-                {/* Total Assets Card */}
-                <div className="rounded-lg border bg-white p-6 shadow-sm dark:bg-zinc-950">
-                    <p className="text-sm font-medium text-zinc-500">Total Assets</p>
-                    <p className="mt-2 text-4xl font-bold">{assetCount}</p>
-                </div>
-
-                {/* Available Assets Card */}
-                <div className="rounded-lg border bg-white p-6 shadow-sm dark:bg-zinc-950">
-                    <p className="text-sm font-medium text-zinc-500">Available</p>
-                    <p className="mt-2 text-4xl font-bold text-green-600">
-                        {availableAssets}
+            {/* Charts Section - Coming in Phase 2 */}
+            <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                {/* Placeholder for Status Chart */}
+                <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="font-semibold text-zinc-900 dark:text-white">
+                        Status Distribution
+                    </h3>
+                    <p className="mt-2 text-sm text-zinc-500">
+                        Chart coming in Phase 2
                     </p>
                 </div>
 
-                {/* Assigned Assets Card */}
-                <div className="rounded-lg border bg-white p-6 shadow-sm dark:bg-zinc-950">
-                    <p className="text-sm font-medium text-zinc-500">Assigned</p>
-                    <p className="mt-2 text-4xl font-bold text-blue-600">
-                        {assignedAssets}
+                {/* Placeholder for Category Chart */}
+                <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="font-semibold text-zinc-900 dark:text-white">
+                        Assets by Category
+                    </h3>
+                    <p className="mt-2 text-sm text-zinc-500">
+                        Chart coming in Phase 2
                     </p>
                 </div>
             </div>
@@ -65,26 +125,32 @@ export default async function TenantDashboardPage({
             {/* Quick Actions */}
             <div className="mt-8">
                 <h3 className="text-lg font-semibold">Quick Actions</h3>
-                <div className="mt-4 flex gap-4">
-                    <a
+                <div className="mt-4 flex flex-wrap gap-4">
+                    <Link
                         href={`/t/${slug}/assets`}
-                        className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+                        className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
                     >
                         View Assets
-                    </a>
+                    </Link>
+                    <Link
+                        href={`/t/${slug}/scan`}
+                        className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+                    >
+                        Scan Asset
+                    </Link>
                     {(user.role === "ADMIN" || user.isSuperAdmin) && (
-                        <a
+                        <Link
                             href={`/t/${slug}/users`}
-                            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50"
+                            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
                         >
                             Manage Users
-                        </a>
+                        </Link>
                     )}
                 </div>
             </div>
 
             {/* Plan Info */}
-            <div className="mt-8 rounded-lg border bg-violet-50 p-6 dark:bg-violet-900/20">
+            <div className="mt-8 rounded-xl border bg-violet-50 p-6 dark:bg-violet-900/20">
                 <h3 className="font-semibold text-violet-900 dark:text-violet-100">
                     Current Plan: {tenant.plan}
                 </h3>
