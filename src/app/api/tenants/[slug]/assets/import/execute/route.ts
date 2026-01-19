@@ -7,9 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
-import { handleApiError, badRequest } from '@/lib/api-error';
+import { handleApiError } from '@/lib/api-error';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { Prisma } from '@/generated/prisma';
+import { ImportExecuteSchema, validateBody, type ImportRow } from '@/lib/validations';
 
 interface RouteParams {
     params: Promise<{
@@ -24,22 +25,6 @@ interface FieldDefinition {
     required?: boolean;
     options?: string[];
 }
-
-interface ImportRow {
-    name: string;
-    serialNumber?: string;
-    assetTag?: string;
-    status?: string;
-    condition?: string;
-    location?: string;
-    purchasePrice?: string;
-    purchaseDate?: string;
-    warrantyEnd?: string;
-    notes?: string;
-    [key: string]: string | undefined; // Custom fields by label
-}
-
-const MAX_ROWS = 1000;
 
 /**
  * POST /api/tenants/[slug]/assets/import/execute
@@ -74,19 +59,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         }
 
         const body = await request.json();
-        const { categoryId, rows } = body as { categoryId: string; rows: ImportRow[] };
 
-        if (!categoryId) {
-            throw badRequest('categoryId is required');
-        }
+        // Validate with Zod schema
+        const validated = validateBody(ImportExecuteSchema, body);
+        if ('error' in validated) return validated.error;
 
-        if (!rows || !Array.isArray(rows) || rows.length === 0) {
-            throw badRequest('rows array is required and must not be empty');
-        }
-
-        if (rows.length > MAX_ROWS) {
-            throw badRequest(`Maximum ${MAX_ROWS} rows allowed per import`);
-        }
+        const { categoryId, rows } = validated.data;
 
         // Fetch category with field schema
         const category = await db.assetCategory.findFirst({
@@ -176,15 +154,17 @@ function extractCustomFields(
     const customFields: Record<string, string | number> = {};
 
     for (const field of fieldSchema) {
-        const value = row[field.label];
+        // Cast row to Record to access by label (Zod passthrough allows any keys)
+        const rowRecord = row as Record<string, unknown>;
+        const value = rowRecord[field.label];
 
-        if (value !== undefined && value !== '') {
+        if (value !== undefined && value !== null && value !== '') {
             const key = labelToKeyMap.get(field.label) || field.key;
 
             // Type conversion
-            if (field.type === 'number') {
+            if (field.type === 'number' && typeof value === 'string') {
                 customFields[key] = Number(value);
-            } else {
+            } else if (typeof value === 'string' || typeof value === 'number') {
                 customFields[key] = value;
             }
         }

@@ -7,23 +7,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
-import { handleApiError, badRequest, notFound } from '@/lib/api-error';
+import { handleApiError, notFound } from '@/lib/api-error';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { AssetStatus } from '@/generated/prisma';
+import { BulkActionSchema, validateBody } from '@/lib/validations';
 
 interface RouteParams {
     params: Promise<{
         slug: string;
     }>;
-}
-
-interface BulkActionRequest {
-    action: 'update_status' | 'assign' | 'unassign' | 'delete';
-    assetIds: string[];
-    data?: {
-        status?: string;
-        assignedToId?: string;
-    };
 }
 
 const VALID_STATUSES = ['AVAILABLE', 'ASSIGNED', 'MAINTENANCE', 'RETIRED'];
@@ -56,18 +48,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const body: BulkActionRequest = await request.json();
-        const { action, assetIds, data } = body;
+        const body = await request.json();
 
-        // Validate request
-        if (!action || !assetIds || !Array.isArray(assetIds) || assetIds.length === 0) {
-            throw badRequest('action and assetIds are required');
-        }
+        // Validate request with Zod
+        const validated = validateBody(BulkActionSchema, body);
+        if ('error' in validated) return validated.error;
 
-        // Limit bulk operations
-        if (assetIds.length > 1000) {
-            throw badRequest('Cannot process more than 1000 assets at once');
-        }
+        const { action, assetIds, data } = validated.data;
 
         // Verify all assets belong to this tenant
         const assetCount = await db.asset.count({
@@ -86,7 +73,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         switch (action) {
             case 'update_status':
                 if (!data?.status || !VALID_STATUSES.includes(data.status)) {
-                    throw badRequest(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`);
+                    return NextResponse.json(
+                        { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` },
+                        { status: 400 }
+                    );
                 }
 
                 result = await db.asset.updateMany({

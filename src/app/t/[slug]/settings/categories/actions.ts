@@ -4,17 +4,7 @@ import { db } from "@/lib/db";
 import { requireTenantAccess, hasRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-// Field type definition
-export interface FieldDefinition {
-    key: string;
-    label: string;
-    type: "text" | "textarea" | "number" | "select" | "date" | "boolean";
-    required: boolean;
-    placeholder?: string;
-    options?: string[]; // For select type
-    helpText?: string;
-}
+import { CreateCategorySchema, UpdateCategorySchema, validateFormData } from "@/lib/validations";
 
 /**
  * Create a new asset category
@@ -28,14 +18,13 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
         throw new Error("You need ADMIN role to manage categories");
     }
 
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string | null;
-    const icon = formData.get("icon") as string | null;
-    const fieldSchemaRaw = formData.get("fieldSchema") as string;
-
-    if (!name) {
-        throw new Error("Category name is required");
+    // Extract and validate data with Zod
+    const result = validateFormData(CreateCategorySchema, formData);
+    if (!result.success) {
+        throw new Error(result.error);
     }
+
+    const { name, description, icon, fieldSchema } = result.data;
 
     // Check if category already exists
     const existing = await db.assetCategory.findFirst({
@@ -44,16 +33,6 @@ export async function createCategory(tenantSlug: string, formData: FormData) {
 
     if (existing) {
         throw new Error("A category with this name already exists");
-    }
-
-    // Parse and validate field schema
-    let fieldSchema: FieldDefinition[] = [];
-    try {
-        if (fieldSchemaRaw) {
-            fieldSchema = JSON.parse(fieldSchemaRaw);
-        }
-    } catch {
-        throw new Error("Invalid field schema format");
     }
 
     await db.assetCategory.create({
@@ -86,11 +65,13 @@ export async function updateCategory(
         throw new Error("You need ADMIN role to manage categories");
     }
 
-    const name = formData.get("name") as string;
-    const description = formData.get("description") as string | null;
-    const icon = formData.get("icon") as string | null;
-    const fieldSchemaRaw = formData.get("fieldSchema") as string;
-    const isActive = formData.get("isActive") === "true";
+    // Extract and validate data with Zod
+    const result = validateFormData(UpdateCategorySchema, formData);
+    if (!result.success) {
+        throw new Error(result.error);
+    }
+
+    const { name, description, icon, fieldSchema, isActive } = result.data;
 
     if (!name) {
         throw new Error("Category name is required");
@@ -107,15 +88,6 @@ export async function updateCategory(
 
     if (existing) {
         throw new Error("A category with this name already exists");
-    }
-
-    let fieldSchema: FieldDefinition[] = [];
-    try {
-        if (fieldSchemaRaw) {
-            fieldSchema = JSON.parse(fieldSchemaRaw);
-        }
-    } catch {
-        throw new Error("Invalid field schema format");
     }
 
     await db.assetCategory.update({
