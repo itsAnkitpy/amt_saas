@@ -4,6 +4,9 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusChart } from "@/components/dashboard/status-chart";
 import { CategoryChart } from "@/components/dashboard/category-chart";
 import { ConditionChart } from "@/components/dashboard/condition-chart";
+import { WarrantyAlert } from "@/components/dashboard/warranty-alert";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { addDays } from "date-fns";
 import Link from "next/link";
 
 interface TenantDashboardPageProps {
@@ -33,6 +36,9 @@ export default async function TenantDashboardPage({
     const { slug } = await params;
     const { user, tenant } = await requireTenantAccess(slug);
 
+    const now = new Date();
+    const thirtyDaysFromNow = addDays(now, 30);
+
     // Get all stats and chart data in parallel for performance
     const [
         userCount,
@@ -44,6 +50,9 @@ export default async function TenantDashboardPage({
         statusDistribution,
         categoryBreakdown,
         conditionDistribution,
+        warrantyExpiring,
+        warrantyExpired,
+        recentActivities,
     ] = await Promise.all([
         db.user.count({ where: { tenantId: tenant.id } }),
         db.asset.count({ where: { tenantId: tenant.id } }),
@@ -71,6 +80,49 @@ export default async function TenantDashboardPage({
             by: ["condition"],
             where: { tenantId: tenant.id },
             _count: { condition: true },
+        }),
+        // Warranty expiring in next 30 days
+        db.asset.findMany({
+            where: {
+                tenantId: tenant.id,
+                warrantyEnd: {
+                    gte: now,
+                    lte: thirtyDaysFromNow,
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                warrantyEnd: true,
+            },
+            orderBy: { warrantyEnd: "asc" },
+        }),
+        // Already expired warranties
+        db.asset.findMany({
+            where: {
+                tenantId: tenant.id,
+                warrantyEnd: {
+                    lt: now,
+                    gte: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()), // Last 1 year only
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                warrantyEnd: true,
+            },
+            orderBy: { warrantyEnd: "desc" },
+        }),
+        // Recent activity (last 5)
+        db.assetActivity.findMany({
+            where: { tenantId: tenant.id },
+            include: {
+                asset: {
+                    select: { id: true, name: true },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 5,
         }),
     ]);
 
@@ -100,6 +152,28 @@ export default async function TenantDashboardPage({
     const conditionData = conditionDistribution.map((item) => ({
         condition: item.condition,
         count: item._count.condition,
+    }));
+
+    // Transform warranty data
+    const expiringWarrantyData = warrantyExpiring.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        warrantyEnd: asset.warrantyEnd!,
+    }));
+
+    const expiredWarrantyData = warrantyExpired.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        warrantyEnd: asset.warrantyEnd!,
+    }));
+
+    // Transform activity data
+    const activityData = recentActivities.map((activity) => ({
+        id: activity.id,
+        action: activity.action,
+        createdAt: activity.createdAt,
+        details: activity.details as Record<string, unknown> | null,
+        asset: activity.asset,
     }));
 
     return (
@@ -168,13 +242,36 @@ export default async function TenantDashboardPage({
                 </div>
             </div>
 
-            {/* Condition Health Section */}
-            <div className="mt-6">
+            {/* Condition Health & Warranty Alerts Row */}
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                {/* Condition Health */}
                 <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
                     <h3 className="font-semibold text-zinc-900 dark:text-white">
                         Condition Health
                     </h3>
                     <ConditionChart data={conditionData} />
+                </div>
+
+                {/* Warranty Alerts */}
+                <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="mb-4 font-semibold text-zinc-900 dark:text-white">
+                        Warranty Alerts
+                    </h3>
+                    <WarrantyAlert
+                        expiringAssets={expiringWarrantyData}
+                        expiredAssets={expiredWarrantyData}
+                        tenantSlug={slug}
+                    />
+                </div>
+            </div>
+
+            {/* Recent Activity Section */}
+            <div className="mt-6">
+                <div className="rounded-xl border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="mb-4 font-semibold text-zinc-900 dark:text-white">
+                        Recent Activity
+                    </h3>
+                    <RecentActivity activities={activityData} tenantSlug={slug} />
                 </div>
             </div>
 

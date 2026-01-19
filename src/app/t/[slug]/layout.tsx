@@ -1,5 +1,5 @@
 import { requireTenantAccess } from "@/lib/auth";
-import { UserButton } from "@clerk/nextjs";
+import { ClientUserButton } from "@/components/client-user-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
@@ -57,7 +57,7 @@ export default async function TenantLayout({
                             {user.firstName} ({user.role})
                         </span>
                         <ThemeToggle />
-                        <UserButton afterSwitchSessionUrl="/" />
+                        <ClientUserButton />
                     </div>
                 </header>
 
