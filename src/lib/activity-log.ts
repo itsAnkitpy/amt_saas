@@ -8,6 +8,8 @@
 import { db } from '@/lib/db';
 import { AssetAction } from '@/generated/prisma';
 
+type ActivityLogDbClient = Pick<typeof db, 'assetActivity'>;
+
 interface LogActivityParams {
     action: AssetAction;
     assetId: string;
@@ -20,8 +22,11 @@ interface LogActivityParams {
 /**
  * Log a single asset activity
  */
-export async function logAssetActivity(params: LogActivityParams) {
-    return db.assetActivity.create({
+export async function logAssetActivity(
+    params: LogActivityParams,
+    client: ActivityLogDbClient = db
+) {
+    return client.assetActivity.create({
         data: {
             action: params.action,
             assetId: params.assetId,
@@ -45,11 +50,12 @@ export async function logBulkAssetActivity(
     userId: string,
     userName: string,
     tenantId: string,
-    details?: Record<string, unknown>
+    details?: Record<string, unknown>,
+    client: ActivityLogDbClient = db
 ) {
     if (assetIds.length === 0) return { count: 0 };
 
-    return db.assetActivity.createMany({
+    return client.assetActivity.createMany({
         data: assetIds.map(assetId => ({
             action,
             assetId,

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireTenantAccess } from "@/lib/auth";
+import { hasRole, requireTenantAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DynamicDisplay, FieldDefinition } from "@/components/dynamic-form";
@@ -64,15 +64,15 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
         notFound();
     }
 
-    // Get users for assignment modal
-    const users = await db.user.findMany({
-        where: { tenantId: tenant.id, isActive: true },
-        orderBy: { firstName: "asc" },
-    });
-
     const fieldSchema = asset.category.fieldSchema as unknown as FieldDefinition[];
     const customFields = asset.customFields as unknown as Record<string, unknown>;
-    const isAdmin = user.role === "ADMIN" || user.isSuperAdmin;
+    const canManageAssets = hasRole(user, "MANAGER");
+    const users = canManageAssets
+        ? await db.user.findMany({
+            where: { tenantId: tenant.id, isActive: true },
+            orderBy: { firstName: "asc" },
+        })
+        : [];
 
     return (
         <div className="mx-auto max-w-4xl">
@@ -97,7 +97,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                     </div>
                 </div>
 
-                {isAdmin && (
+                {canManageAssets && (
                     <div className="flex gap-2">
                         {asset.status === "AVAILABLE" ? (
                             <AssignmentModal
@@ -136,7 +136,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                 <AssetImagesSection
                     tenantSlug={slug}
                     assetId={asset.id}
-                    isAdmin={isAdmin}
+                    isAdmin={canManageAssets}
                 />
             </div>
 
@@ -310,7 +310,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                     </div>
 
                     {/* Delete */}
-                    {isAdmin && (
+                    {canManageAssets && (
                         <form action={async () => {
                             "use server";
                             await deleteAsset(slug, id);

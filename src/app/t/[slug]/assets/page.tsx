@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireTenantAccess } from "@/lib/auth";
+import { hasRole, requireTenantAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { AssetsTable } from "@/components/assets-table";
 import {
@@ -33,7 +33,8 @@ const DEFAULT_PAGE_SIZE = 10;
 export default async function AssetsPage({ params, searchParams }: AssetsPageProps) {
     const { slug } = await params;
     const { search, status, category, page, pageSize: pageSizeParam } = await searchParams;
-    const { tenant } = await requireTenantAccess(slug);
+    const { tenant, user } = await requireTenantAccess(slug);
+    const canManageAssets = hasRole(user, "MANAGER");
 
     // Parse and validate page size
     const requestedPageSize = parseInt(pageSizeParam || String(DEFAULT_PAGE_SIZE), 10);
@@ -94,15 +95,17 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     });
 
     // Fetch users for assignment
-    const users = await db.user.findMany({
-        where: { tenantId: tenant.id },
-        orderBy: { firstName: "asc" },
-        select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-        },
-    });
+    const users = canManageAssets
+        ? await db.user.findMany({
+            where: { tenantId: tenant.id },
+            orderBy: { firstName: "asc" },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+            },
+        })
+        : [];
 
     // Stats
     const stats = await db.asset.groupBy({
@@ -148,12 +151,14 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                         {allAssetsCount} total • {availableCount} available • {assignedCount} assigned
                     </p>
                 </div>
-                <Link href={`/t/${slug}/assets/new`}>
-                    <Button>
-                        <PlusIcon className="mr-2 h-4 w-4" />
-                        Add Asset
-                    </Button>
-                </Link>
+                {canManageAssets && (
+                    <Link href={`/t/${slug}/assets/new`}>
+                        <Button>
+                            <PlusIcon className="mr-2 h-4 w-4" />
+                            Add Asset
+                        </Button>
+                    </Link>
+                )}
             </div>
 
             {/* Filters */}
@@ -200,7 +205,13 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
 
             {/* Assets Table with Multi-Select */}
             <div className="mt-6">
-                <AssetsTable assets={assets} tenantSlug={slug} categories={categories} users={users} />
+                <AssetsTable
+                    assets={assets}
+                    tenantSlug={slug}
+                    categories={categories}
+                    users={users}
+                    canManageAssets={canManageAssets}
+                />
             </div>
 
             {/* Pagination */}

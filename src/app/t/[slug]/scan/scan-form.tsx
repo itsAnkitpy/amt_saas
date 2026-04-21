@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ import { quickAssignAsset, quickUnassignAsset } from './actions';
 
 interface ScanFormProps {
     tenantSlug: string;
+    canManageAssets: boolean;
 }
 
 interface User {
@@ -48,7 +49,7 @@ interface LookupResult {
 /**
  * Client component for scanning/searching assets with quick actions
  */
-export function ScanForm({ tenantSlug }: ScanFormProps) {
+export function ScanForm({ tenantSlug, canManageAssets }: ScanFormProps) {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle');
     const [result, setResult] = useState<LookupResult | null>(null);
@@ -247,10 +248,12 @@ export function ScanForm({ tenantSlug }: ScanFormProps) {
                                 <Button variant="outline" size="sm" onClick={goToAsset}>
                                     View
                                 </Button>
-                                <Button size="sm" onClick={openAssignModal} disabled={isProcessing}>
-                                    <UserPlus className="mr-2 h-4 w-4" />
-                                    Assign
-                                </Button>
+                                {canManageAssets && (
+                                    <Button size="sm" onClick={openAssignModal} disabled={isProcessing}>
+                                        <UserPlus className="mr-2 h-4 w-4" />
+                                        Assign
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -289,19 +292,21 @@ export function ScanForm({ tenantSlug }: ScanFormProps) {
                                 <Button variant="outline" size="sm" onClick={goToAsset}>
                                     View
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={handleUnassign}
-                                    disabled={isProcessing}
-                                >
-                                    {isProcessing ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                    )}
-                                    Return
-                                </Button>
+                                {canManageAssets && (
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={handleUnassign}
+                                        disabled={isProcessing}
+                                    >
+                                        {isProcessing ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        ) : (
+                                            <RotateCcw className="mr-2 h-4 w-4" />
+                                        )}
+                                        Return
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -343,16 +348,20 @@ export function ScanForm({ tenantSlug }: ScanFormProps) {
                                 No asset found for &quot;{query}&quot;
                             </p>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Would you like to create a new asset with this serial number?
+                                {canManageAssets
+                                    ? "Would you like to create a new asset with this serial number?"
+                                    : "You can search again or ask a manager to create this asset."}
                             </p>
                             <div className="flex justify-center gap-3 mt-4">
                                 <Button variant="outline" onClick={resetSearch}>
                                     Search Again
                                 </Button>
-                                <Button onClick={createNewAsset}>
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Create Asset
-                                </Button>
+                                {canManageAssets && (
+                                    <Button onClick={createNewAsset}>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Create Asset
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -369,7 +378,7 @@ export function ScanForm({ tenantSlug }: ScanFormProps) {
             )}
 
             {/* Assignment Modal */}
-            {showAssignModal && (
+            {canManageAssets && showAssignModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
                     <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-zinc-900 mx-4">
                         <div className="mb-4 flex items-center justify-between">

@@ -35,19 +35,43 @@ export function AssignmentModal({
     const [selectedUserId, setSelectedUserId] = useState<string>("");
     const [notes, setNotes] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const handleAssign = async () => {
         if (!selectedUserId) return;
 
         setIsSubmitting(true);
-        await assignAsset(tenantSlug, assetId, selectedUserId, notes || undefined);
+        setError(null);
+
+        const result = await assignAsset(
+            tenantSlug,
+            assetId,
+            selectedUserId,
+            notes || undefined
+        );
+
+        if (result?.error) {
+            setError(result.error);
+            setIsSubmitting(false);
+            return;
+        }
+
         setIsOpen(false);
+        setSelectedUserId("");
+        setNotes("");
         setIsSubmitting(false);
     };
 
     return (
         <>
-            <Button variant="default" size="sm" onClick={() => setIsOpen(true)}>
+            <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                    setError(null);
+                    setIsOpen(true);
+                }}
+            >
                 <UserPlusIcon className="mr-2 h-4 w-4" />
                 Assign
             </Button>
@@ -58,7 +82,10 @@ export function AssignmentModal({
                         <div className="mb-4 flex items-center justify-between">
                             <h3 className="text-lg font-semibold">Assign Asset</h3>
                             <button
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => {
+                                    setError(null);
+                                    setIsOpen(false);
+                                }}
                                 className="text-zinc-400 hover:text-zinc-600"
                             >
                                 <XIcon className="h-5 w-5" />
@@ -66,6 +93,11 @@ export function AssignmentModal({
                         </div>
 
                         <div className="space-y-4">
+                            {error && (
+                                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                                    {error}
+                                </div>
+                            )}
                             <div className="space-y-1">
                                 <Label>Select User *</Label>
                                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
@@ -97,7 +129,10 @@ export function AssignmentModal({
                         <div className="mt-6 flex justify-end gap-3">
                             <Button
                                 variant="outline"
-                                onClick={() => setIsOpen(false)}
+                                onClick={() => {
+                                    setError(null);
+                                    setIsOpen(false);
+                                }}
                                 disabled={isSubmitting}
                             >
                                 Cancel

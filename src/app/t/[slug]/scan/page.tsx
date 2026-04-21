@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { requireTenantAccess } from "@/lib/auth";
+import { hasRole, requireTenantAccess } from "@/lib/auth";
 import { ScanForm } from "./scan-form";
 
 interface ScanPageProps {
@@ -16,7 +16,8 @@ export const metadata: Metadata = {
  */
 export default async function ScanPage({ params }: ScanPageProps) {
     const { slug } = await params;
-    const { tenant } = await requireTenantAccess(slug);
+    const { user } = await requireTenantAccess(slug);
+    const canManageAssets = hasRole(user, "MANAGER");
 
     return (
         <div className="mx-auto max-w-md">
@@ -42,7 +43,7 @@ export default async function ScanPage({ params }: ScanPageProps) {
                 </p>
             </div>
 
-            <ScanForm tenantSlug={slug} />
+            <ScanForm tenantSlug={slug} canManageAssets={canManageAssets} />
 
             <div className="mt-8 text-center text-sm text-muted-foreground">
                 <p>Tip: USB barcode scanners work like keyboards.</p>

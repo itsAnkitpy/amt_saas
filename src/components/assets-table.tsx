@@ -105,6 +105,7 @@ interface AssetsTableProps {
     tenantSlug: string;
     categories: Category[];
     users: User[];
+    canManageAssets: boolean;
 }
 
 // Pending action state for confirmation dialog
@@ -125,7 +126,13 @@ const statusColors: Record<string, string> = {
 /**
  * Assets Table with Multi-Select and Bulk Actions
  */
-export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTableProps) {
+export function AssetsTable({
+    assets,
+    tenantSlug,
+    categories,
+    users,
+    canManageAssets,
+}: AssetsTableProps) {
     const router = useRouter();
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
@@ -297,7 +304,10 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
     return (
         <>
             {/* Confirmation Dialog */}
-            <AlertDialog open={!!pendingAction} onOpenChange={() => setPendingAction(null)}>
+            <AlertDialog
+                open={canManageAssets && !!pendingAction}
+                onOpenChange={() => setPendingAction(null)}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>{pendingAction?.title}</AlertDialogTitle>
@@ -324,18 +334,23 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
             </AlertDialog>
 
             {/* Import Modal */}
-            <BulkImportModal
-                tenantSlug={tenantSlug}
-                categories={categories}
-                open={isImportModalOpen}
-                onClose={() => setIsImportModalOpen(false)}
-            />
+            {canManageAssets && (
+                <BulkImportModal
+                    tenantSlug={tenantSlug}
+                    categories={categories}
+                    open={isImportModalOpen}
+                    onClose={() => setIsImportModalOpen(false)}
+                />
+            )}
 
             {/* Assign Modal */}
-            <Dialog open={isAssignModalOpen} onOpenChange={(open) => {
-                setIsAssignModalOpen(open);
-                if (!open) setSelectedUserId('');
-            }}>
+            <Dialog
+                open={canManageAssets && isAssignModalOpen}
+                onOpenChange={(open) => {
+                    setIsAssignModalOpen(open);
+                    if (!open) setSelectedUserId('');
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Assign {selectedIds.size} Asset{selectedIds.size > 1 ? 's' : ''}</DialogTitle>
@@ -375,18 +390,20 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
 
             <div className="space-y-4">
                 {/* Toolbar with Import button */}
-                <div className="flex justify-end">
-                    <Button
-                        variant="outline"
-                        onClick={() => setIsImportModalOpen(true)}
-                    >
-                        <UploadIcon className="mr-2 h-4 w-4" />
-                        Import Assets
-                    </Button>
-                </div>
+                {canManageAssets && (
+                    <div className="flex justify-end">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsImportModalOpen(true)}
+                        >
+                            <UploadIcon className="mr-2 h-4 w-4" />
+                            Import Assets
+                        </Button>
+                    </div>
+                )}
 
                 {/* Floating Action Bar - shown when items selected */}
-                {selectedIds.size > 0 && (
+                {canManageAssets && selectedIds.size > 0 && (
                     <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm dark:bg-zinc-900">
                         <span className="text-sm font-medium">
                             {selectedIds.size} asset{selectedIds.size > 1 ? 's' : ''} selected
@@ -486,13 +503,15 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-12">
-                                    <Checkbox
-                                        checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
-                                        onCheckedChange={toggleSelectAll}
-                                        aria-label="Select all"
-                                    />
-                                </TableHead>
+                                {canManageAssets && (
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
+                                            onCheckedChange={toggleSelectAll}
+                                            aria-label="Select all"
+                                        />
+                                    </TableHead>
+                                )}
                                 <TableHead className="w-16"></TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Category</TableHead>
@@ -505,7 +524,10 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
                         <TableBody>
                             {assets.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="py-12 text-center">
+                                    <TableCell
+                                        colSpan={canManageAssets ? 8 : 7}
+                                        className="py-12 text-center"
+                                    >
                                         <p className="text-zinc-500">No assets found</p>
                                     </TableCell>
                                 </TableRow>
@@ -517,15 +539,21 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
                                     return (
                                         <TableRow
                                             key={asset.id}
-                                            className={isSelected ? 'bg-violet-50 dark:bg-violet-950/20' : ''}
+                                            className={
+                                                canManageAssets && isSelected
+                                                    ? 'bg-violet-50 dark:bg-violet-950/20'
+                                                    : ''
+                                            }
                                         >
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => toggleSelect(asset.id)}
-                                                    aria-label={`Select ${asset.name}`}
-                                                />
-                                            </TableCell>
+                                            {canManageAssets && (
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => toggleSelect(asset.id)}
+                                                        aria-label={`Select ${asset.name}`}
+                                                    />
+                                                </TableCell>
+                                            )}
                                             <TableCell className="w-16 py-2">
                                                 <div className="h-12 w-12 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                                     {primaryImage ? (
@@ -578,4 +606,3 @@ export function AssetsTable({ assets, tenantSlug, categories, users }: AssetsTab
         </>
     );
 }
-
