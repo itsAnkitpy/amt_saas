@@ -67,7 +67,9 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
     const fieldSchema = asset.category.fieldSchema as unknown as FieldDefinition[];
     const customFields = asset.customFields as unknown as Record<string, unknown>;
     const canManageAssets = hasRole(user, "MANAGER");
-    const users = canManageAssets
+    const isArchived = Boolean(asset.archivedAt);
+    const canManageCurrentAsset = canManageAssets && !isArchived;
+    const users = canManageCurrentAsset
         ? await db.user.findMany({
             where: { tenantId: tenant.id, isActive: true },
             orderBy: { firstName: "asc" },
@@ -93,11 +95,14 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                             <Badge className={conditionColors[asset.condition]}>
                                 {asset.condition}
                             </Badge>
+                            {isArchived && (
+                                <Badge variant="outline">Archived</Badge>
+                            )}
                         </div>
                     </div>
                 </div>
 
-                {canManageAssets && (
+                {canManageCurrentAsset && (
                     <div className="flex gap-2">
                         {asset.status === "AVAILABLE" ? (
                             <AssignmentModal
@@ -136,9 +141,18 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                 <AssetImagesSection
                     tenantSlug={slug}
                     assetId={asset.id}
-                    isAdmin={canManageAssets}
+                    isAdmin={canManageCurrentAsset}
                 />
             </div>
+
+            {isArchived && (
+                <div className="mt-6 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                    This asset is archived and read-only in the normal app flow.
+                    {asset.archivedAt && (
+                        <> Archived on {new Date(asset.archivedAt).toLocaleDateString()}.</>
+                    )}
+                </div>
+            )}
 
             {/* Main Content Grid */}
             <div className="mt-6 grid gap-6 lg:grid-cols-3">
@@ -282,6 +296,11 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                         <p className="text-zinc-500">
                             Updated: {new Date(asset.updatedAt).toLocaleDateString()}
                         </p>
+                        {asset.archivedAt && (
+                            <p className="text-zinc-500">
+                                Archived: {new Date(asset.archivedAt).toLocaleDateString()}
+                            </p>
+                        )}
                     </div>
 
                     {/* QR Code */}
@@ -310,7 +329,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                     </div>
 
                     {/* Delete */}
-                    {canManageAssets && (
+                    {canManageCurrentAsset && !asset.assignedToId && (
                         <form action={async () => {
                             "use server";
                             await deleteAsset(slug, id);
@@ -321,7 +340,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                                 className="w-full text-red-600 hover:bg-red-50"
                             >
                                 <TrashIcon className="mr-2 h-4 w-4" />
-                                Delete Asset
+                                Archive Asset
                             </Button>
                         </form>
                     )}

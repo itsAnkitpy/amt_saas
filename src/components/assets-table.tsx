@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -106,6 +107,7 @@ interface AssetsTableProps {
     categories: Category[];
     users: User[];
     canManageAssets: boolean;
+    showArchived?: boolean;
 }
 
 // Pending action state for confirmation dialog
@@ -132,8 +134,10 @@ export function AssetsTable({
     categories,
     users,
     canManageAssets,
+    showArchived = false,
 }: AssetsTableProps) {
     const router = useRouter();
+    const canMutateAssets = canManageAssets && !showArchived;
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -235,8 +239,8 @@ export function AssetsTable({
     const requestDelete = () => {
         setPendingAction({
             action: 'delete',
-            title: 'Delete Assets',
-            description: 'This will mark the selected assets as retired. Assigned assets cannot be deleted - unassign them first.'
+            title: 'Archive Assets',
+            description: 'This will archive the selected assets and remove them from the active inventory list. Assigned assets cannot be archived - unassign them first.'
         });
     };
 
@@ -277,7 +281,7 @@ export function AssetsTable({
     // Handle CSV export (uses link click to avoid pop-up blockers)
     const handleExport = (exportAll: boolean = false) => {
         const url = exportAll
-            ? `/api/tenants/${tenantSlug}/assets/export`
+            ? `/api/tenants/${tenantSlug}/assets/export${showArchived ? '?archived=true' : ''}`
             : `/api/tenants/${tenantSlug}/assets/export?ids=${Array.from(selectedIds).join(',')}`;
 
         // Create temporary link and click it to trigger download
@@ -305,7 +309,7 @@ export function AssetsTable({
         <>
             {/* Confirmation Dialog */}
             <AlertDialog
-                open={canManageAssets && !!pendingAction}
+                open={canMutateAssets && !!pendingAction}
                 onOpenChange={() => setPendingAction(null)}
             >
                 <AlertDialogContent>
@@ -334,7 +338,7 @@ export function AssetsTable({
             </AlertDialog>
 
             {/* Import Modal */}
-            {canManageAssets && (
+            {canMutateAssets && (
                 <BulkImportModal
                     tenantSlug={tenantSlug}
                     categories={categories}
@@ -345,7 +349,7 @@ export function AssetsTable({
 
             {/* Assign Modal */}
             <Dialog
-                open={canManageAssets && isAssignModalOpen}
+                open={canMutateAssets && isAssignModalOpen}
                 onOpenChange={(open) => {
                     setIsAssignModalOpen(open);
                     if (!open) setSelectedUserId('');
@@ -390,7 +394,7 @@ export function AssetsTable({
 
             <div className="space-y-4">
                 {/* Toolbar with Import button */}
-                {canManageAssets && (
+                {canMutateAssets && (
                     <div className="flex justify-end">
                         <Button
                             variant="outline"
@@ -403,7 +407,7 @@ export function AssetsTable({
                 )}
 
                 {/* Floating Action Bar - shown when items selected */}
-                {canManageAssets && selectedIds.size > 0 && (
+                {canMutateAssets && selectedIds.size > 0 && (
                     <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm dark:bg-zinc-900">
                         <span className="text-sm font-medium">
                             {selectedIds.size} asset{selectedIds.size > 1 ? 's' : ''} selected
@@ -503,7 +507,7 @@ export function AssetsTable({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                {canManageAssets && (
+                                {canMutateAssets && (
                                     <TableHead className="w-12">
                                         <Checkbox
                                             checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
@@ -525,7 +529,7 @@ export function AssetsTable({
                             {assets.length === 0 ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={canManageAssets ? 8 : 7}
+                                        colSpan={canMutateAssets ? 8 : 7}
                                         className="py-12 text-center"
                                     >
                                         <p className="text-zinc-500">No assets found</p>
@@ -540,12 +544,12 @@ export function AssetsTable({
                                         <TableRow
                                             key={asset.id}
                                             className={
-                                                canManageAssets && isSelected
+                                                canMutateAssets && isSelected
                                                     ? 'bg-violet-50 dark:bg-violet-950/20'
                                                     : ''
                                             }
                                         >
-                                            {canManageAssets && (
+                                            {canMutateAssets && (
                                                 <TableCell>
                                                     <Checkbox
                                                         checked={isSelected}
@@ -555,12 +559,15 @@ export function AssetsTable({
                                                 </TableCell>
                                             )}
                                             <TableCell className="w-16 py-2">
-                                                <div className="h-12 w-12 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+                                                <div className="relative h-12 w-12 rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                                                     {primaryImage ? (
-                                                        <img
+                                                        <Image
                                                             src={`/api/images/${primaryImage.id}/thumb`}
                                                             alt={asset.name}
-                                                            className="h-full w-full object-cover"
+                                                            fill
+                                                            unoptimized
+                                                            sizes="48px"
+                                                            className="object-cover"
                                                         />
                                                     ) : (
                                                         <ImageIcon className="h-5 w-5 text-zinc-400" />

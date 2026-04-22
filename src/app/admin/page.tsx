@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import Link from "next/link";
 
 /**
  * Admin Dashboard Page
@@ -9,7 +10,7 @@ export default async function AdminDashboardPage() {
     const [tenantCount, userCount, assetCount] = await Promise.all([
         db.tenant.count(),
         db.user.count(),
-        db.asset.count(),
+        db.asset.count({ where: { archivedAt: null } }),
     ]);
 
     return (
@@ -44,12 +45,12 @@ export default async function AdminDashboardPage() {
             <div className="mt-8">
                 <h3 className="text-lg font-semibold">Quick Actions</h3>
                 <div className="mt-4 flex gap-4">
-                    <a
+                    <Link
                         href="/admin/tenants/new"
                         className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
                     >
                         + Create Tenant
-                    </a>
+                    </Link>
                 </div>
             </div>
         </div>

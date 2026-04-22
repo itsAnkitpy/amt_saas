@@ -38,7 +38,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const idsParam = searchParams.get('ids');
 
         // Build where clause
-        const where: { tenantId: string; id?: { in: string[] } } = {
+        const archivedParam = searchParams.get('archived');
+
+        const where: {
+            tenantId: string;
+            id?: { in: string[] };
+            archivedAt?: null | { not: null };
+        } = {
             tenantId: tenant.id
         };
 
@@ -48,6 +54,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             if (ids.length > 0) {
                 where.id = { in: ids };
             }
+        } else {
+            where.archivedAt = archivedParam === 'true' ? { not: null } : null;
         }
 
         // Fetch assets with relations

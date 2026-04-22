@@ -105,6 +105,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
+        if (asset.archivedAt) {
+            return NextResponse.json(
+                { error: 'Archived assets are read-only' },
+                { status: 400 }
+            );
+        }
+
         // Check max images limit
         if (asset._count.images >= IMAGE_CONFIG.maxImagesPerAsset) {
             return NextResponse.json(

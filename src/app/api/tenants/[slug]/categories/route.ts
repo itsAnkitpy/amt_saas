@@ -16,7 +16,7 @@ export async function GET(
         });
 
         return NextResponse.json(categories);
-    } catch (error) {
+    } catch {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 }

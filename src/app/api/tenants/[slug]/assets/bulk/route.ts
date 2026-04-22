@@ -5,11 +5,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
-import { handleApiError, notFound } from '@/lib/api-error';
-import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
-import { AssetStatus } from '@/generated/prisma';
+import { handleApiError } from '@/lib/api-error';
+import {
+    bulkAssignAssetsForTenant,
+    bulkDeleteAssetsForTenant,
+    bulkUnassignAssetsForTenant,
+    bulkUpdateAssetStatusForTenant,
+} from '@/lib/asset-service';
 import { BulkActionSchema, validateBody } from '@/lib/validations';
 
 interface RouteParams {
@@ -18,7 +21,8 @@ interface RouteParams {
     }>;
 }
 
-const VALID_STATUSES = ['AVAILABLE', 'ASSIGNED', 'MAINTENANCE', 'RETIRED'];
+const VALID_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'] as const;
+type BulkStatusAction = (typeof VALID_STATUSES)[number];
 
 /**
  * POST /api/tenants/[slug]/assets/bulk
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { user, tenant } = authResult;
+        const { user } = authResult;
 
         // RBAC: Require MANAGER role for bulk operations
         const roleError = requireRole(user, 'MANAGER');
@@ -54,47 +58,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const validated = validateBody(BulkActionSchema, body);
         if ('error' in validated) return validated.error;
 
-        const { action, assetIds, data } = validated.data;
-
-        // Verify all assets belong to this tenant
-        const assetCount = await db.asset.count({
-            where: {
-                id: { in: assetIds },
-                tenantId: tenant.id
-            }
-        });
-
-        if (assetCount !== assetIds.length) {
-            throw notFound('Some assets not found or do not belong to this tenant');
-        }
+        const { action, data } = validated.data;
+        const assetIds = Array.from(new Set(validated.data.assetIds));
 
         let result: { count: number };
 
         switch (action) {
             case 'update_status':
-                if (!data?.status || !VALID_STATUSES.includes(data.status)) {
+                if (
+                    !data?.status ||
+                    !VALID_STATUSES.includes(data.status as BulkStatusAction)
+                ) {
                     return NextResponse.json(
                         { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` },
                         { status: 400 }
                     );
                 }
 
-                result = await db.asset.updateMany({
-                    where: {
-                        id: { in: assetIds },
-                        tenantId: tenant.id
-                    },
-                    data: { status: data.status as AssetStatus }
-                });
-
-                // Log status change activity
-                await logBulkAssetActivity(
-                    'STATUS_CHANGED',
+                result = await bulkUpdateAssetStatusForTenant(
+                    slug,
                     assetIds,
-                    authResult.user.id,
-                    getUserDisplayName(authResult.user),
-                    tenant.id,
-                    { to: data.status }
+                    data.status as BulkStatusAction
                 );
                 break;
 
@@ -106,100 +90,24 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                     );
                 }
 
-                // Verify user exists and belongs to tenant
-                const assignee = await db.user.findFirst({
-                    where: { id: data.assignedToId, tenantId: tenant.id }
-                });
-
-                if (!assignee) {
-                    return NextResponse.json(
-                        { error: 'Assignee not found' },
-                        { status: 404 }
-                    );
-                }
-
-                result = await db.asset.updateMany({
-                    where: {
-                        id: { in: assetIds },
-                        tenantId: tenant.id
-                    },
-                    data: {
-                        assignedToId: data.assignedToId,
-                        status: 'ASSIGNED'
-                    }
-                });
-
-                // Log assign activity
-                await logBulkAssetActivity(
-                    'ASSIGNED',
+                result = await bulkAssignAssetsForTenant(
+                    slug,
                     assetIds,
-                    authResult.user.id,
-                    getUserDisplayName(authResult.user),
-                    tenant.id,
-                    { assignedTo: `${assignee.firstName} ${assignee.lastName || ''}`.trim() }
+                    data.assignedToId,
+                    'Assigned via bulk action'
                 );
                 break;
 
             case 'unassign':
-                result = await db.asset.updateMany({
-                    where: {
-                        id: { in: assetIds },
-                        tenantId: tenant.id
-                    },
-                    data: {
-                        assignedToId: null,
-                        status: 'AVAILABLE'
-                    }
-                });
-
-                // Log unassign activity
-                await logBulkAssetActivity(
-                    'UNASSIGNED',
+                result = await bulkUnassignAssetsForTenant(
+                    slug,
                     assetIds,
-                    authResult.user.id,
-                    getUserDisplayName(authResult.user),
-                    tenant.id
+                    'Unassigned via bulk action'
                 );
                 break;
 
             case 'delete':
-                // Check if any assets are assigned
-                const assignedAssets = await db.asset.count({
-                    where: {
-                        id: { in: assetIds },
-                        tenantId: tenant.id,
-                        status: 'ASSIGNED'
-                    }
-                });
-
-                if (assignedAssets > 0) {
-                    return NextResponse.json(
-                        { error: `Cannot delete ${assignedAssets} assigned assets. Unassign them first.` },
-                        { status: 400 }
-                    );
-                }
-
-                // Soft delete by marking as RETIRED and setting archivedAt
-                result = await db.asset.updateMany({
-                    where: {
-                        id: { in: assetIds },
-                        tenantId: tenant.id
-                    },
-                    data: {
-                        status: 'RETIRED',
-                        archivedAt: new Date()
-                    }
-                });
-
-                // Log delete activity
-                await logBulkAssetActivity(
-                    'DELETED',
-                    assetIds,
-                    authResult.user.id,
-                    getUserDisplayName(authResult.user),
-                    tenant.id,
-                    { reason: 'bulk_delete' }
-                );
+                result = await bulkDeleteAssetsForTenant(slug, assetIds);
                 break;
 
             default:

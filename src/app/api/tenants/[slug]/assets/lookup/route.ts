@@ -65,6 +65,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const asset = await db.asset.findFirst({
             where: {
                 tenantId: tenant.id,
+                archivedAt: null,
                 OR: searchConditions,
             },
             select: {

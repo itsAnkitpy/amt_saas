@@ -109,9 +109,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         const fieldSchema = (category.fieldSchema as unknown as FieldDefinition[]) || [];
 
-        // Build label-to-key map for custom fields
-        const labelToKeyMap = new Map(fieldSchema.map(f => [f.label, f.key]));
-
         const validRows: ValidatedRow[] = [];
         const invalidRows: InvalidRow[] = [];
 
@@ -120,7 +117,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             const row = rows[i];
             const rowNumber = i + 2; // Account for header + 1-based
 
-            const { valid, errors } = validateRow(row, fieldSchema, labelToKeyMap);
+            const { valid, errors } = validateRow(row, fieldSchema);
 
             if (valid) {
                 validRows.push({ rowNumber, data: row });
@@ -153,8 +150,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  */
 function validateRow(
     row: Record<string, string>,
-    fieldSchema: FieldDefinition[],
-    labelToKeyMap: Map<string, string>
+    fieldSchema: FieldDefinition[]
 ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 

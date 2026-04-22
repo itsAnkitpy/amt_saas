@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { requireTenantAccess } from "@/lib/auth";
-import { Button } from "@/components/ui/button";
 import { FolderIcon, UsersIcon, SettingsIcon } from "lucide-react";
 
 interface SettingsPageProps {

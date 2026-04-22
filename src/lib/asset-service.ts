@@ -3,7 +3,9 @@ import { db } from "@/lib/db";
 import {
     getUserDisplayName,
     logAssetActivity,
+    logBulkAssetActivity,
 } from "@/lib/activity-log";
+import { badRequest, notFound } from "@/lib/api-error";
 import { Prisma } from "@/generated/prisma";
 import {
     CreateAssetSchema,
@@ -17,6 +19,13 @@ type AssetMutationDbClient = Pick<
     typeof db,
     "asset" | "assetActivity" | "assetAssignment" | "assetCategory" | "user"
 >;
+
+type AssetAssignmentState = {
+    id: string;
+    status: string;
+    assignedToId: string | null;
+    archivedAt?: Date | null;
+};
 
 function getErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof Error && error.message) {
@@ -99,7 +108,7 @@ async function getCategoryForTenantOrThrow(
     });
 
     if (!category) {
-        throw new Error("Category not found");
+        throw notFound("Category not found");
     }
 
     return category;
@@ -138,11 +147,11 @@ async function ensureIdentifiersAreUnique(
     ]);
 
     if (serialConflict) {
-        throw new Error("An asset with this serial number already exists");
+        throw badRequest("An asset with this serial number already exists");
     }
 
     if (assetTagConflict) {
-        throw new Error("An asset with this asset tag already exists");
+        throw badRequest("An asset with this asset tag already exists");
     }
 }
 
@@ -165,10 +174,44 @@ async function getAssignableUserForTenantOrThrow(
     });
 
     if (!assignee) {
-        throw new Error("Assignee not found");
+        throw notFound("Assignee not found");
     }
 
     return assignee;
+}
+
+function assertAssetCanBeAssigned(asset: AssetAssignmentState) {
+    if (asset.archivedAt) {
+        throw badRequest("Archived assets cannot be assigned");
+    }
+
+    if (asset.assignedToId || asset.status === "ASSIGNED") {
+        throw badRequest("Asset is already assigned");
+    }
+
+    if (asset.status !== "AVAILABLE") {
+        throw badRequest("Only available assets can be assigned");
+    }
+}
+
+function assertAssetCanBeUnassigned(asset: AssetAssignmentState) {
+    if (asset.archivedAt) {
+        throw badRequest("Archived assets cannot be unassigned");
+    }
+
+    if (!asset.assignedToId || asset.status !== "ASSIGNED") {
+        throw badRequest("Asset is not currently assigned");
+    }
+}
+
+function assertAssetNotArchived(asset: { archivedAt: Date | null }) {
+    if (asset.archivedAt) {
+        throw badRequest("Archived assets cannot be modified");
+    }
+}
+
+function dedupeAssetIds(assetIds: string[]) {
+    return Array.from(new Set(assetIds));
 }
 
 export async function createAssetForTenant(
@@ -259,12 +302,15 @@ export async function updateAssetForTenant(
                 warrantyEnd: true,
                 customFields: true,
                 assignedToId: true,
+                archivedAt: true,
             },
         });
 
         if (!existingAsset) {
-            throw new Error("Asset not found");
+            throw notFound("Asset not found");
         }
+
+        assertAssetNotArchived(existingAsset);
 
         await getCategoryForTenantOrThrow(tx, assetData.categoryId, tenant.id);
 
@@ -373,7 +419,7 @@ export async function deleteAssetForTenant(
     tenantSlug: string,
     assetId: string
 ) {
-    const { tenant } = await requireAssetManagerContext(tenantSlug);
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
     return db.$transaction(async (tx) => {
         const asset = await tx.asset.findFirst({
@@ -385,20 +431,44 @@ export async function deleteAssetForTenant(
                 id: true,
                 name: true,
                 assignedToId: true,
+                archivedAt: true,
             },
         });
 
         if (!asset) {
-            throw new Error("Asset not found");
+            throw notFound("Asset not found");
         }
+
+        assertAssetNotArchived(asset);
 
         if (asset.assignedToId) {
-            throw new Error("Unassign the asset before deleting it");
+            throw badRequest("Unassign the asset before deleting it");
         }
 
-        await tx.asset.delete({
+        const archivedAt = new Date();
+
+        await tx.asset.update({
             where: { id: asset.id },
+            data: {
+                status: "RETIRED",
+                archivedAt,
+            },
         });
+
+        await logAssetActivity(
+            {
+                action: "DELETED",
+                assetId: asset.id,
+                userId: user.id,
+                userName: getUserDisplayName(user),
+                tenantId: tenant.id,
+                details: {
+                    reason: "soft_delete",
+                    archivedAt: archivedAt.toISOString(),
+                },
+            },
+            tx
+        );
 
         return asset;
     });
@@ -422,16 +492,15 @@ export async function assignAssetForTenant(
                 id: true,
                 status: true,
                 assignedToId: true,
+                archivedAt: true,
             },
         });
 
         if (!asset) {
-            throw new Error("Asset not found");
+            throw notFound("Asset not found");
         }
 
-        if (asset.assignedToId || asset.status === "ASSIGNED") {
-            throw new Error("Asset is already assigned");
-        }
+        assertAssetCanBeAssigned(asset);
 
         const assignee = await getAssignableUserForTenantOrThrow(
             tx,
@@ -490,16 +559,15 @@ export async function unassignAssetForTenant(
                 id: true,
                 status: true,
                 assignedToId: true,
+                archivedAt: true,
             },
         });
 
         if (!asset) {
-            throw new Error("Asset not found");
+            throw notFound("Asset not found");
         }
 
-        if (!asset.assignedToId || asset.status !== "ASSIGNED") {
-            throw new Error("Asset is not currently assigned");
-        }
+        assertAssetCanBeUnassigned(asset);
 
         const currentAssignment = await tx.assetAssignment.findFirst({
             where: {
@@ -518,7 +586,7 @@ export async function unassignAssetForTenant(
         });
 
         if (!currentAssignment) {
-            throw new Error("Active assignment record not found");
+            throw badRequest("Active assignment record not found");
         }
 
         await tx.assetAssignment.update({
@@ -552,6 +620,347 @@ export async function unassignAssetForTenant(
         );
 
         return asset;
+    });
+}
+
+export async function bulkUpdateAssetStatusForTenant(
+    tenantSlug: string,
+    assetIds: string[],
+    status: "AVAILABLE" | "MAINTENANCE" | "RETIRED"
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+    const uniqueAssetIds = dedupeAssetIds(assetIds);
+
+    return db.$transaction(async (tx) => {
+        const assets = await tx.asset.findMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                status: true,
+                assignedToId: true,
+                archivedAt: true,
+            },
+        });
+
+        if (assets.length !== uniqueAssetIds.length) {
+            throw notFound("Some assets not found or do not belong to this tenant");
+        }
+
+        const assignedAssetsCount = assets.filter(
+            (asset) => asset.assignedToId || asset.status === "ASSIGNED"
+        ).length;
+        const archivedAssetsCount = assets.filter((asset) => asset.archivedAt).length;
+
+        if (assignedAssetsCount > 0) {
+            throw badRequest(
+                `Cannot change status for ${assignedAssetsCount} assigned asset(s). Unassign them first.`
+            );
+        }
+
+        if (archivedAssetsCount > 0) {
+            throw badRequest(
+                `Cannot change status for ${archivedAssetsCount} archived asset(s).`
+            );
+        }
+
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: { status },
+        });
+
+        await logBulkAssetActivity(
+            "STATUS_CHANGED",
+            uniqueAssetIds,
+            user.id,
+            getUserDisplayName(user),
+            tenant.id,
+            { to: status },
+            tx
+        );
+
+        return { count: result.count };
+    });
+}
+
+export async function bulkAssignAssetsForTenant(
+    tenantSlug: string,
+    assetIds: string[],
+    assigneeId: string,
+    notes?: string
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+    const uniqueAssetIds = dedupeAssetIds(assetIds);
+
+    return db.$transaction(async (tx) => {
+        const assets = await tx.asset.findMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                status: true,
+                assignedToId: true,
+                archivedAt: true,
+            },
+        });
+
+        if (assets.length !== uniqueAssetIds.length) {
+            throw notFound("Some assets not found or do not belong to this tenant");
+        }
+
+        const alreadyAssignedCount = assets.filter(
+            (asset) => asset.assignedToId || asset.status === "ASSIGNED"
+        ).length;
+        const unavailableCount = assets.filter(
+            (asset) => !asset.assignedToId && asset.status !== "AVAILABLE"
+        ).length;
+        const archivedCount = assets.filter((asset) => asset.archivedAt).length;
+
+        if (alreadyAssignedCount > 0 || unavailableCount > 0 || archivedCount > 0) {
+            const reasons: string[] = [];
+
+            if (alreadyAssignedCount > 0) {
+                reasons.push(`${alreadyAssignedCount} asset(s) are already assigned`);
+            }
+
+            if (unavailableCount > 0) {
+                reasons.push(
+                    `${unavailableCount} asset(s) are not available for assignment`
+                );
+            }
+
+            if (archivedCount > 0) {
+                reasons.push(`${archivedCount} asset(s) are archived`);
+            }
+
+            throw badRequest(
+                `Cannot assign selected assets: ${reasons.join("; ")}.`
+            );
+        }
+
+        const assignee = await getAssignableUserForTenantOrThrow(
+            tx,
+            assigneeId,
+            tenant.id
+        );
+        const assignmentNotes = notes?.trim() || null;
+
+        await tx.assetAssignment.createMany({
+            data: uniqueAssetIds.map((assetId) => ({
+                assetId,
+                userId: assignee.id,
+                notes: assignmentNotes,
+            })),
+        });
+
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: {
+                assignedToId: assignee.id,
+                status: "ASSIGNED",
+            },
+        });
+
+        await logBulkAssetActivity(
+            "ASSIGNED",
+            uniqueAssetIds,
+            user.id,
+            getUserDisplayName(user),
+            tenant.id,
+            {
+                assignedTo: getUserDisplayName(assignee),
+            },
+            tx
+        );
+
+        return { count: result.count };
+    });
+}
+
+export async function bulkUnassignAssetsForTenant(
+    tenantSlug: string,
+    assetIds: string[],
+    notes?: string
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+    const uniqueAssetIds = dedupeAssetIds(assetIds);
+
+    return db.$transaction(async (tx) => {
+        const assets = await tx.asset.findMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                status: true,
+                assignedToId: true,
+                archivedAt: true,
+            },
+        });
+
+        if (assets.length !== uniqueAssetIds.length) {
+            throw notFound("Some assets not found or do not belong to this tenant");
+        }
+
+        const notAssignedCount = assets.filter(
+            (asset) => !asset.assignedToId || asset.status !== "ASSIGNED"
+        ).length;
+        const archivedCount = assets.filter((asset) => asset.archivedAt).length;
+
+        if (archivedCount > 0) {
+            throw badRequest(
+                `Cannot unassign ${archivedCount} archived asset(s).`
+            );
+        }
+
+        if (notAssignedCount > 0) {
+            throw badRequest(
+                `Cannot unassign ${notAssignedCount} asset(s) because they are not currently assigned.`
+            );
+        }
+
+        const openAssignments = await tx.assetAssignment.findMany({
+            where: {
+                assetId: { in: uniqueAssetIds },
+                returnedAt: null,
+            },
+            include: {
+                user: {
+                    select: {
+                        firstName: true,
+                        lastName: true,
+                    },
+                },
+            },
+        });
+
+        if (openAssignments.length !== uniqueAssetIds.length) {
+            throw badRequest(
+                "Active assignment records were missing for one or more selected assets"
+            );
+        }
+
+        await tx.assetAssignment.updateMany({
+            where: {
+                id: { in: openAssignments.map((assignment) => assignment.id) },
+            },
+            data: notes?.trim()
+                ? {
+                    returnedAt: new Date(),
+                    notes: notes.trim(),
+                }
+                : {
+                    returnedAt: new Date(),
+                },
+        });
+
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: {
+                assignedToId: null,
+                status: "AVAILABLE",
+            },
+        });
+
+        await tx.assetActivity.createMany({
+            data: openAssignments.map((assignment) => ({
+                action: "UNASSIGNED",
+                assetId: assignment.assetId,
+                userId: user.id,
+                tenantId: tenant.id,
+                details: {
+                    performedBy: getUserDisplayName(user),
+                    previousAssignee: getUserDisplayName(assignment.user),
+                },
+            })),
+        });
+
+        return { count: result.count };
+    });
+}
+
+export async function bulkDeleteAssetsForTenant(
+    tenantSlug: string,
+    assetIds: string[]
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+    const uniqueAssetIds = dedupeAssetIds(assetIds);
+
+    return db.$transaction(async (tx) => {
+        const assets = await tx.asset.findMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                status: true,
+                assignedToId: true,
+                archivedAt: true,
+            },
+        });
+
+        if (assets.length !== uniqueAssetIds.length) {
+            throw notFound("Some assets not found or do not belong to this tenant");
+        }
+
+        const assignedCount = assets.filter(
+            (asset) => asset.assignedToId || asset.status === "ASSIGNED"
+        ).length;
+        const archivedCount = assets.filter((asset) => asset.archivedAt).length;
+
+        if (assignedCount > 0) {
+            throw badRequest(
+                `Cannot delete ${assignedCount} assigned asset(s). Unassign them first.`
+            );
+        }
+
+        if (archivedCount > 0) {
+            throw badRequest(
+                `${archivedCount} selected asset(s) are already archived.`
+            );
+        }
+
+        const archivedAt = new Date();
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: {
+                status: "RETIRED",
+                archivedAt,
+            },
+        });
+
+        await logBulkAssetActivity(
+            "DELETED",
+            uniqueAssetIds,
+            user.id,
+            getUserDisplayName(user),
+            tenant.id,
+            {
+                reason: "bulk_soft_delete",
+                archivedAt: archivedAt.toISOString(),
+            },
+            tx
+        );
+
+        return { count: result.count };
     });
 }
 

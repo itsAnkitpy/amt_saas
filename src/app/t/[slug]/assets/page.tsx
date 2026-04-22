@@ -19,6 +19,7 @@ interface AssetsPageProps {
         search?: string;
         status?: string;
         category?: string;
+        archived?: string;
         page?: string;
         pageSize?: string;
     }>;
@@ -32,9 +33,17 @@ const DEFAULT_PAGE_SIZE = 10;
  */
 export default async function AssetsPage({ params, searchParams }: AssetsPageProps) {
     const { slug } = await params;
-    const { search, status, category, page, pageSize: pageSizeParam } = await searchParams;
+    const {
+        search,
+        status,
+        category,
+        archived,
+        page,
+        pageSize: pageSizeParam,
+    } = await searchParams;
     const { tenant, user } = await requireTenantAccess(slug);
     const canManageAssets = hasRole(user, "MANAGER");
+    const showArchived = archived === "true";
 
     // Parse and validate page size
     const requestedPageSize = parseInt(pageSizeParam || String(DEFAULT_PAGE_SIZE), 10);
@@ -46,7 +55,10 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     const skip = (currentPage - 1) * pageSize;
 
     // Build where clause
-    const where: Record<string, unknown> = { tenantId: tenant.id };
+    const where: Record<string, unknown> = {
+        tenantId: tenant.id,
+        archivedAt: showArchived ? { not: null } : null,
+    };
 
     if (search) {
         where.OR = [
@@ -124,6 +136,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
         if (search) params.set("search", search);
         if (status) params.set("status", status);
         if (category) params.set("category", category);
+        if (showArchived) params.set("archived", "true");
         params.set("page", pageNum.toString());
         params.set("pageSize", (newPageSize || pageSize).toString());
         return `/t/${slug}/assets?${params.toString()}`;
@@ -146,23 +159,41 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold">Assets</h2>
+                    <h2 className="text-2xl font-bold">
+                        {showArchived ? "Archived Assets" : "Assets"}
+                    </h2>
                     <p className="text-muted-foreground">
-                        {allAssetsCount} total • {availableCount} available • {assignedCount} assigned
+                        {showArchived
+                            ? `${allAssetsCount} archived asset${allAssetsCount === 1 ? "" : "s"}`
+                            : `${allAssetsCount} total • ${availableCount} available • ${assignedCount} assigned`}
                     </p>
                 </div>
-                {canManageAssets && (
-                    <Link href={`/t/${slug}/assets/new`}>
-                        <Button>
-                            <PlusIcon className="mr-2 h-4 w-4" />
-                            Add Asset
+                <div className="flex items-center gap-2">
+                    <Link
+                        href={
+                            showArchived
+                                ? `/t/${slug}/assets`
+                                : `/t/${slug}/assets?archived=true`
+                        }
+                    >
+                        <Button variant="outline">
+                            {showArchived ? "View Active Assets" : "View Archived"}
                         </Button>
                     </Link>
-                )}
+                    {canManageAssets && !showArchived && (
+                        <Link href={`/t/${slug}/assets/new`}>
+                            <Button>
+                                <PlusIcon className="mr-2 h-4 w-4" />
+                                Add Asset
+                            </Button>
+                        </Link>
+                    )}
+                </div>
             </div>
 
             {/* Filters */}
             <form className="mt-6 flex flex-wrap gap-4">
+                {showArchived && <input type="hidden" name="archived" value="true" />}
                 <div className="flex-1">
                     <div className="relative">
                         <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -211,6 +242,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                     categories={categories}
                     users={users}
                     canManageAssets={canManageAssets}
+                    showArchived={showArchived}
                 />
             </div>
 

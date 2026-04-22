@@ -55,36 +55,37 @@ export default async function TenantDashboardPage({
         recentActivities,
     ] = await Promise.all([
         db.user.count({ where: { tenantId: tenant.id } }),
-        db.asset.count({ where: { tenantId: tenant.id } }),
-        db.asset.count({ where: { tenantId: tenant.id, status: "AVAILABLE" } }),
-        db.asset.count({ where: { tenantId: tenant.id, status: "ASSIGNED" } }),
-        db.asset.count({ where: { tenantId: tenant.id, status: "MAINTENANCE" } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: null } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "AVAILABLE" } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "ASSIGNED" } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "MAINTENANCE" } }),
         db.asset.aggregate({
-            where: { tenantId: tenant.id },
+            where: { tenantId: tenant.id, archivedAt: null },
             _sum: { purchasePrice: true },
         }),
         // Status distribution for chart
         db.asset.groupBy({
             by: ["status"],
-            where: { tenantId: tenant.id },
+            where: { tenantId: tenant.id, archivedAt: null },
             _count: { status: true },
         }),
         // Category breakdown for chart
         db.asset.groupBy({
             by: ["categoryId"],
-            where: { tenantId: tenant.id },
+            where: { tenantId: tenant.id, archivedAt: null },
             _count: { categoryId: true },
         }),
         // Condition distribution for chart
         db.asset.groupBy({
             by: ["condition"],
-            where: { tenantId: tenant.id },
+            where: { tenantId: tenant.id, archivedAt: null },
             _count: { condition: true },
         }),
         // Warranty expiring in next 30 days
         db.asset.findMany({
             where: {
                 tenantId: tenant.id,
+                archivedAt: null,
                 warrantyEnd: {
                     gte: now,
                     lte: thirtyDaysFromNow,
@@ -101,6 +102,7 @@ export default async function TenantDashboardPage({
         db.asset.findMany({
             where: {
                 tenantId: tenant.id,
+                archivedAt: null,
                 warrantyEnd: {
                     lt: now,
                     gte: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()), // Last 1 year only

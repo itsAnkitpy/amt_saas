@@ -30,11 +30,6 @@ export function CameraScanner({ onScan, onError }: CameraScannerProps) {
         }, 3000);
     };
 
-    // Called when camera stream is ready
-    const handleCameraReady = useCallback(() => {
-        setIsLoading(false);
-    }, []);
-
     const handleClose = () => {
         setIsOpen(false);
         setIsLoading(false);

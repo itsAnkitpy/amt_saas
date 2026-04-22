@@ -7,6 +7,7 @@
  */
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Star, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -114,10 +115,13 @@ export function ImageGallery({
                         onClick={() => openLightbox(index)}
                     >
                         {/* Thumbnail */}
-                        <img
+                        <Image
                             src={`/api/images/${image.id}/thumb`}
                             alt={image.fileName}
-                            className="w-full h-full object-cover"
+                            fill
+                            unoptimized
+                            sizes="(max-width: 768px) 50vw, 25vw"
+                            className="object-cover"
                             onError={(e) => {
                                 // Show placeholder on error
                                 e.currentTarget.style.display = 'none';
@@ -200,16 +204,23 @@ export function ImageGallery({
                     )}
 
                     {/* Image */}
-                    <img
-                        src={`/api/images/${images[currentIndex].id}`}
-                        alt={images[currentIndex].fileName}
-                        className="max-h-[90vh] max-w-[90vw] object-contain"
+                    <div
+                        className="relative h-[90vh] w-[90vw]"
                         onClick={(e) => e.stopPropagation()}
-                        onError={(e) => {
-                            // Show error message for broken images in lightbox
-                            e.currentTarget.style.display = 'none';
-                        }}
-                    />
+                    >
+                        <Image
+                            src={`/api/images/${images[currentIndex].id}`}
+                            alt={images[currentIndex].fileName}
+                            fill
+                            unoptimized
+                            sizes="90vw"
+                            className="object-contain"
+                            onError={(e) => {
+                                // Show error message for broken images in lightbox
+                                e.currentTarget.style.display = 'none';
+                            }}
+                        />
+                    </div>
 
                     {/* Counter */}
                     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">

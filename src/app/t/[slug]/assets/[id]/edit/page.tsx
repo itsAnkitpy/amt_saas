@@ -23,6 +23,7 @@ export default async function EditAssetPage({ params }: EditAssetPageProps) {
         where: {
             id,
             tenantId: tenant.id,
+            archivedAt: null,
         },
         include: {
             category: true,

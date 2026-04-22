@@ -35,7 +35,7 @@ export const BulkActionSchema = z.object({
     data: z
         .object({
             status: AssetStatusSchema.optional(),
-            assignedToId: CuidSchema.optional(),
+            assignedToId: z.string().min(1, 'assignedToId is required').optional(),
         })
         .optional(),
 });

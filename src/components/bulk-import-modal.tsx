@@ -17,14 +17,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
 import { Label } from '@/components/ui/label';
 import {
     DownloadIcon,
@@ -60,6 +52,7 @@ interface BulkImportModalProps {
 }
 
 type Step = 'select' | 'upload' | 'preview' | 'complete';
+const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export function BulkImportModal({
     tenantSlug,
@@ -96,16 +89,13 @@ export function BulkImportModal({
         document.body.removeChild(link);
     };
 
-    // Handle file upload (Issue 4: wrapped in useCallback, Issue 5: file size validation)
-    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
     const handleFileUpload = useCallback(async (file: File) => {
         if (!file.name.endsWith('.csv')) {
             setError('Please upload a CSV file');
             return;
         }
 
-        if (file.size > MAX_FILE_SIZE) {
+        if (file.size > MAX_IMPORT_FILE_SIZE) {
             setError('File too large. Maximum 5MB allowed.');
             return;
         }

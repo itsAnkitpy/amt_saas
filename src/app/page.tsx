@@ -4,7 +4,6 @@ import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   CheckCircle2,
   ChevronRight,
@@ -13,13 +12,9 @@ import {
   Zap,
   BarChart3,
   Search,
-  Users,
   Smartphone,
-  FileText,
-  Menu,
   X,
   ArrowRight,
-  Minus,
   Plus
 } from "lucide-react";
 
@@ -289,7 +284,9 @@ export default async function Home() {
                 <div key={i} className="relative pl-8 border-l-2 border-red-100 dark:border-red-900/30">
                   <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">{pain.title}</h3>
                   <p className="text-zinc-600 dark:text-zinc-400 mb-4">{pain.description}</p>
-                  <p className="text-sm italic text-red-500 dark:text-red-400">"{pain.quote}"</p>
+                  <p className="text-sm italic text-red-500 dark:text-red-400">
+                    &ldquo;{pain.quote}&rdquo;
+                  </p>
                 </div>
               ))}
             </div>
@@ -297,7 +294,7 @@ export default async function Home() {
             <div className="mt-16 bg-zinc-50 rounded-2xl p-8 border border-zinc-100 text-center dark:bg-zinc-900 dark:border-zinc-800">
               <p className="text-lg font-medium text-zinc-900 dark:text-white mb-6">
                 The average operations team loses <span className="text-red-600 font-bold">12 hours per week</span> to manual asset tracking.
-                <br className="hidden sm:block" /> That's 624 hours per year. What would you do with that time back?
+                <br className="hidden sm:block" /> That&rsquo;s 624 hours per year. What would you do with that time back?
               </p>
             </div>
           </Container>
@@ -397,7 +394,9 @@ export default async function Home() {
                   <div className="mb-6 flex gap-1 text-amber-400">
                     {[1, 2, 3, 4, 5].map(star => <svg key={star} className="h-5 w-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
                   </div>
-                  <p className="text-zinc-700 dark:text-zinc-300 italic mb-6">"{t.quote}"</p>
+                  <p className="text-zinc-700 dark:text-zinc-300 italic mb-6">
+                    &ldquo;{t.quote}&rdquo;
+                  </p>
                   <div className="mt-auto">
                     <p className="font-semibold text-zinc-900 dark:text-white">{t.author}</p>
                     <p className="text-sm text-zinc-500">{t.role}, {t.company}</p>
@@ -440,7 +439,7 @@ export default async function Home() {
               Ready to Take Control of Your Assets?
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-zinc-400 mb-10">
-              Join 500+ operations teams who've eliminated spreadsheet chaos and gained complete asset visibility.
+              Join 500+ operations teams who&rsquo;ve eliminated spreadsheet chaos and gained complete asset visibility.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">

@@ -50,6 +50,13 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             );
         }
 
+        if (image.asset.archivedAt) {
+            return NextResponse.json(
+                { error: 'Archived assets are read-only' },
+                { status: 400 }
+            );
+        }
+
         // If this was primary, set another image as primary BEFORE deleting
         if (image.isPrimary) {
             const nextImage = await db.assetImage.findFirst({
@@ -149,6 +156,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json(
                 { error: 'Image not found' },
                 { status: 404 }
+            );
+        }
+
+        if (image.asset.archivedAt) {
+            return NextResponse.json(
+                { error: 'Archived assets are read-only' },
+                { status: 400 }
             );
         }
 

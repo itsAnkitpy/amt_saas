@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Upload, X, Loader2, ImageIcon } from 'lucide-react';
 
@@ -120,11 +121,11 @@ export function ImageUpload({ tenantSlug, assetId, onUploadComplete }: ImageUplo
         }, 2000);
     };
 
-    const handleDrop = useCallback((e: React.DragEvent) => {
+    const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         processFiles(e.dataTransfer.files);
-    }, []);
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -185,12 +186,15 @@ export function ImageUpload({ tenantSlug, assetId, onUploadComplete }: ImageUplo
                             className="flex items-center gap-3 p-2 border rounded-lg bg-white dark:bg-zinc-900"
                         >
                             {/* Preview */}
-                            <div className="h-12 w-12 rounded overflow-hidden bg-zinc-100 flex-shrink-0">
+                            <div className="relative h-12 w-12 rounded overflow-hidden bg-zinc-100 flex-shrink-0">
                                 {item.preview ? (
-                                    <img
+                                    <Image
                                         src={item.preview}
                                         alt=""
-                                        className="h-full w-full object-cover"
+                                        fill
+                                        unoptimized
+                                        sizes="48px"
+                                        className="object-cover"
                                     />
                                 ) : (
                                     <ImageIcon className="h-full w-full p-2 text-zinc-400" />
