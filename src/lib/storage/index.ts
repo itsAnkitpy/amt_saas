@@ -39,13 +39,10 @@ let storageProvider: StorageProvider | null = null;
 export function getStorage(): StorageProvider {
     if (!storageProvider) {
         if (process.env.BLOB_READ_WRITE_TOKEN) {
-            console.log('[Storage] Using Vercel Blob Storage');
             storageProvider = new VercelBlobStorageProvider();
         } else {
-            console.log('[Storage] Using Local Storage');
             storageProvider = new LocalStorageProvider();
         }
     }
     return storageProvider;
 }
-

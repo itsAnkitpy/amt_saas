@@ -21,11 +21,8 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
     const password = formData.get("password") as string;
     const role = formData.get("role") as Role;
 
-    console.log("Creating user:", { email, firstName, tenantId, role });
-
     // Validate inputs
     if (!email || !firstName || !password) {
-        console.error("Validation failed: missing required fields");
         throw new Error("Email, first name, and password are required");
     }
 
@@ -66,7 +63,6 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
             password,
         });
         clerkUserId = clerkUser.id;
-        console.log("Clerk user created:", clerkUserId);
     } catch (error: unknown) {
         console.error("Error creating Clerk user:", JSON.stringify(error, null, 2));
 
@@ -98,7 +94,6 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
         try {
             const clerk = await clerkClient();
             await clerk.users.deleteUser(clerkUserId);
-            console.log("Rolled back Clerk user after database failure");
         } catch (rollbackError) {
             console.error("Failed to roll back Clerk user:", rollbackError);
         }
@@ -109,8 +104,6 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
                 : "Failed to create user in database"
         );
     }
-
-    console.log("Database user created");
 
     // Revalidate
     revalidatePath(`/admin/tenants/${tenantId}`);

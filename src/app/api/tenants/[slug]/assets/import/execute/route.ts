@@ -7,10 +7,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
-import { handleApiError } from '@/lib/api-error';
+import { handleApiError, badRequest } from '@/lib/api-error';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
+import { validateAndNormalizeCustomFields } from '@/lib/asset-service';
 import { Prisma } from '@/generated/prisma';
-import { ImportExecuteSchema, validateBody, type ImportRow } from '@/lib/validations';
+import { ImportExecuteSchema, validateBody, type ImportRow, type FieldDefinition } from '@/lib/validations';
 
 interface RouteParams {
     params: Promise<{
@@ -18,13 +19,7 @@ interface RouteParams {
     }>;
 }
 
-interface FieldDefinition {
-    key: string;
-    label: string;
-    type: string;
-    required?: boolean;
-    options?: string[];
-}
+// FieldDefinition is imported from '@/lib/validations'
 
 const IMPORTABLE_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'] as const;
 
@@ -113,59 +108,66 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         // Build label-to-key map for custom fields
         const labelToKeyMap = new Map(fieldSchema.map(f => [f.label, f.key]));
 
-        // Transform rows to asset data
-        const assetsData = rows.map(row => ({
-            tenantId: tenant.id,
-            categoryId,
-            name: row.name.trim(),
-            serialNumber: row.serialNumber?.trim() || null,
-            assetTag: row.assetTag?.trim() || null,
-            status: (row.status?.toUpperCase() || 'AVAILABLE') as 'AVAILABLE' | 'ASSIGNED' | 'MAINTENANCE' | 'RETIRED',
-            condition: (row.condition?.toUpperCase() || 'GOOD') as 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR',
-            location: row.location?.trim() || null,
-            purchasePrice: row.purchasePrice ? parseFloat(row.purchasePrice) : null,
-            purchaseDate: row.purchaseDate ? new Date(row.purchaseDate) : null,
-            warrantyEnd: row.warrantyEnd ? new Date(row.warrantyEnd) : null,
-            notes: row.notes?.trim() || null,
-            customFields: extractCustomFields(row, fieldSchema, labelToKeyMap),
-        }));
+        // Transform rows to asset data, validating custom fields against category schema
+        const assetsData = rows.map((row, index) => {
+            const rawCustomFields = extractCustomFields(row, fieldSchema, labelToKeyMap);
 
-        // Batch create assets in a transaction for atomicity (Issue 2)
-        const result = await db.$transaction(async (tx) => {
-            return await tx.asset.createMany({
-                data: assetsData,
-                skipDuplicates: false,
-            });
-        });
+            // Validate and normalize custom fields using the same logic as asset create/update
+            let normalizedCustomFields: Prisma.InputJsonValue;
+            try {
+                normalizedCustomFields = validateAndNormalizeCustomFields(
+                    rawCustomFields as Record<string, unknown>,
+                    fieldSchema
+                ) as Prisma.InputJsonValue;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Invalid custom fields';
+                throw badRequest(`Row ${index + 1}: ${message}`);
+            }
 
-        // Get created asset IDs for activity logging (query by unique fields)
-        const createdAssets = await db.asset.findMany({
-            where: {
+            return {
                 tenantId: tenant.id,
                 categoryId,
-                name: { in: rows.map(r => r.name.trim()) }
-            },
-            select: { id: true },
-            orderBy: { createdAt: 'desc' },
-            take: result.count,
+                name: row.name.trim(),
+                serialNumber: row.serialNumber?.trim() || null,
+                assetTag: row.assetTag?.trim() || null,
+                status: (row.status?.toUpperCase() || 'AVAILABLE') as 'AVAILABLE' | 'ASSIGNED' | 'MAINTENANCE' | 'RETIRED',
+                condition: (row.condition?.toUpperCase() || 'GOOD') as 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR',
+                location: row.location?.trim() || null,
+                purchasePrice: row.purchasePrice ? parseFloat(row.purchasePrice) : null,
+                purchaseDate: row.purchaseDate ? new Date(row.purchaseDate) : null,
+                warrantyEnd: row.warrantyEnd ? new Date(row.warrantyEnd) : null,
+                notes: row.notes?.trim() || null,
+                customFields: normalizedCustomFields,
+            };
         });
 
-        // Log activity for imported assets
-        if (createdAssets.length > 0) {
-            await logBulkAssetActivity(
-                'CREATED',
-                createdAssets.map(a => a.id),
-                user.id,
-                getUserDisplayName(user),
-                tenant.id,
-                { category: category.name, source: 'bulk_import' }
-            );
-        }
+        // Batch create assets and log activity in a single transaction
+        const result = await db.$transaction(async (tx) => {
+            const createdAssets = await tx.asset.createManyAndReturn({
+                data: assetsData,
+                select: { id: true },
+            });
+
+            // Log activity atomically with the creation
+            if (createdAssets.length > 0) {
+                await logBulkAssetActivity(
+                    'CREATED',
+                    createdAssets.map(a => a.id),
+                    user.id,
+                    getUserDisplayName(user),
+                    tenant.id,
+                    { category: category.name, source: 'bulk_import' },
+                    tx
+                );
+            }
+
+            return { count: createdAssets.length, categoryName: category.name };
+        });
 
         return NextResponse.json({
             success: true,
             created: result.count,
-            categoryName: category.name
+            categoryName: result.categoryName
         });
 
     } catch (error) {

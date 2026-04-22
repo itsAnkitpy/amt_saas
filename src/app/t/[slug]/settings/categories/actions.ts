@@ -1,49 +1,19 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { requireTenantAccess, hasRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { CreateCategorySchema, UpdateCategorySchema, validateFormData } from "@/lib/validations";
+import {
+    createCategoryForTenant,
+    deleteCategoryForTenant,
+    updateCategoryForTenant,
+} from "@/lib/category-service";
 
 /**
  * Create a new asset category
  * Requires: ADMIN role
  */
 export async function createCategory(tenantSlug: string, formData: FormData) {
-    const { user, tenant } = await requireTenantAccess(tenantSlug);
-
-    // RBAC: Require ADMIN role for category management
-    if (!hasRole(user, 'ADMIN')) {
-        throw new Error("You need ADMIN role to manage categories");
-    }
-
-    // Extract and validate data with Zod
-    const result = validateFormData(CreateCategorySchema, formData);
-    if (!result.success) {
-        throw new Error(result.error);
-    }
-
-    const { name, description, icon, fieldSchema } = result.data;
-
-    // Check if category already exists
-    const existing = await db.assetCategory.findFirst({
-        where: { tenantId: tenant.id, name },
-    });
-
-    if (existing) {
-        throw new Error("A category with this name already exists");
-    }
-
-    await db.assetCategory.create({
-        data: {
-            name,
-            description,
-            icon,
-            fieldSchema: fieldSchema as unknown as object,
-            tenantId: tenant.id,
-        },
-    });
+    await createCategoryForTenant(tenantSlug, formData);
 
     revalidatePath(`/t/${tenantSlug}/settings/categories`);
     redirect(`/t/${tenantSlug}/settings/categories`);
@@ -58,61 +28,7 @@ export async function updateCategory(
     categoryId: string,
     formData: FormData
 ) {
-    const { user, tenant } = await requireTenantAccess(tenantSlug);
-
-    // RBAC: Require ADMIN role for category management
-    if (!hasRole(user, 'ADMIN')) {
-        throw new Error("You need ADMIN role to manage categories");
-    }
-
-    // Extract and validate data with Zod
-    const result = validateFormData(UpdateCategorySchema, formData);
-    if (!result.success) {
-        throw new Error(result.error);
-    }
-
-    const { name, description, icon, fieldSchema, isActive } = result.data;
-
-    if (!name) {
-        throw new Error("Category name is required");
-    }
-
-    // Ensure the category belongs to this tenant before mutating it
-    const category = await db.assetCategory.findFirst({
-        where: {
-            id: categoryId,
-            tenantId: tenant.id,
-        },
-        select: { id: true },
-    });
-
-    if (!category) {
-        throw new Error("Category not found");
-    }
-
-    // Check if name already exists for another category
-    const existing = await db.assetCategory.findFirst({
-        where: {
-            tenantId: tenant.id,
-            name,
-            NOT: { id: categoryId },
-        },
-    });
-
-    if (existing) {
-        throw new Error("A category with this name already exists");
-    }
-
-    await db.assetCategory.update({
-        where: { id: category.id },
-        data: {
-            name,
-            description,
-            icon,
-            fieldSchema: fieldSchema as unknown as object,
-            isActive,
-        },
-    });
+    await updateCategoryForTenant(tenantSlug, categoryId, formData);
 
     revalidatePath(`/t/${tenantSlug}/settings/categories`);
     redirect(`/t/${tenantSlug}/settings/categories`);
@@ -123,40 +39,7 @@ export async function updateCategory(
  * Requires: ADMIN role
  */
 export async function deleteCategory(tenantSlug: string, categoryId: string) {
-    const { user, tenant } = await requireTenantAccess(tenantSlug);
-
-    // RBAC: Require ADMIN role for category management
-    if (!hasRole(user, 'ADMIN')) {
-        throw new Error("You need ADMIN role to manage categories");
-    }
-
-    const category = await db.assetCategory.findFirst({
-        where: {
-            id: categoryId,
-            tenantId: tenant.id,
-        },
-        select: { id: true },
-    });
-
-    if (!category) {
-        throw new Error("Category not found");
-    }
-
-    // Check if category has assets
-    const assetCount = await db.asset.count({
-        where: {
-            categoryId: category.id,
-            tenantId: tenant.id,
-        },
-    });
-
-    if (assetCount > 0) {
-        throw new Error(`Cannot delete category with ${assetCount} assets. Move or delete assets first.`);
-    }
-
-    await db.assetCategory.delete({
-        where: { id: category.id },
-    });
+    await deleteCategoryForTenant(tenantSlug, categoryId);
 
     revalidatePath(`/t/${tenantSlug}/settings/categories`);
     redirect(`/t/${tenantSlug}/settings/categories`);

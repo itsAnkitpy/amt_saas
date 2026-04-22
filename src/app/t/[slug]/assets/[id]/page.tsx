@@ -10,14 +10,15 @@ import { PrintLabelButton } from "@/components/print-label";
 import {
     ArrowLeftIcon,
     PencilIcon,
-    UserMinusIcon,
-    TrashIcon,
     ImageIcon,
 } from "lucide-react";
 import { AssignmentModal } from "./assignment-modal";
 import { AssetImagesSection } from "./asset-images-section";
+import {
+    ArchiveAssetButton,
+    UnassignAssetButton,
+} from "./asset-action-buttons";
 import { ActivityTimeline } from "@/components/activity-timeline";
-import { deleteAsset } from "../actions";
 
 interface AssetDetailPageProps {
     params: Promise<{ slug: string; id: string }>;
@@ -111,16 +112,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                                 users={users}
                             />
                         ) : asset.status === "ASSIGNED" ? (
-                            <form action={async () => {
-                                "use server";
-                                const { unassignAsset } = await import("../actions");
-                                await unassignAsset(slug, id);
-                            }}>
-                                <Button type="submit" variant="outline" size="sm">
-                                    <UserMinusIcon className="mr-2 h-4 w-4" />
-                                    Unassign
-                                </Button>
-                            </form>
+                            <UnassignAssetButton assetId={id} tenantSlug={slug} />
                         ) : null}
                         <Link href={`/t/${slug}/assets/${id}/edit`}>
                             <Button variant="outline" size="sm">
@@ -330,19 +322,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
 
                     {/* Delete */}
                     {canManageCurrentAsset && !asset.assignedToId && (
-                        <form action={async () => {
-                            "use server";
-                            await deleteAsset(slug, id);
-                        }}>
-                            <Button
-                                type="submit"
-                                variant="outline"
-                                className="w-full text-red-600 hover:bg-red-50"
-                            >
-                                <TrashIcon className="mr-2 h-4 w-4" />
-                                Archive Asset
-                            </Button>
-                        </form>
+                        <ArchiveAssetButton assetId={id} tenantSlug={slug} />
                     )}
                 </div>
             </div>

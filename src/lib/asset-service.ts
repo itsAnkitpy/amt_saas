@@ -163,7 +163,7 @@ function normalizeCustomFieldValue(
     }
 }
 
-function validateAndNormalizeCustomFields(
+export function validateAndNormalizeCustomFields(
     customFields: Record<string, unknown> | null | undefined,
     fieldSchema: CategoryFieldDefinition[]
 ) {

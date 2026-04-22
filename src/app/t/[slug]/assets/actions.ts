@@ -61,7 +61,16 @@ export async function updateAsset(
  * Delete an asset
  */
 export async function deleteAsset(tenantSlug: string, assetId: string) {
-    await deleteAssetForTenant(tenantSlug, assetId);
+    try {
+        await deleteAssetForTenant(tenantSlug, assetId);
+    } catch (error) {
+        return {
+            error: getAssetServiceErrorMessage(
+                error,
+                "Failed to delete asset"
+            ),
+        };
+    }
 
     revalidatePath(`/t/${tenantSlug}/assets`);
     redirect(`/t/${tenantSlug}/assets`);
@@ -99,7 +108,16 @@ export async function unassignAsset(
     assetId: string,
     notes?: string
 ) {
-    await unassignAssetForTenant(tenantSlug, assetId, notes);
+    try {
+        await unassignAssetForTenant(tenantSlug, assetId, notes);
+    } catch (error) {
+        return {
+            error: getAssetServiceErrorMessage(
+                error,
+                "Failed to unassign asset"
+            ),
+        };
+    }
 
     revalidatePath(`/t/${tenantSlug}/assets/${assetId}`);
     revalidatePath(`/t/${tenantSlug}/assets`);
