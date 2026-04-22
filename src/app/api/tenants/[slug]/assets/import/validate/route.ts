@@ -6,8 +6,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { checkTenantAccessForApi } from '@/lib/auth';
+import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
+import {
+    buildImportIssueRows,
+    filterRowsWithoutErrors,
+    findDuplicateIdentifierErrors,
+    findExistingIdentifierErrors,
+    serializeImportableRows,
+    toImportRowContexts,
+} from '@/lib/asset-import';
 import { parseCSV } from '@/lib/csv-utils';
+import type { FieldDefinition } from '@/lib/validations';
 
 interface RouteParams {
     params: Promise<{
@@ -15,28 +24,10 @@ interface RouteParams {
     }>;
 }
 
-interface FieldDefinition {
-    key: string;
-    label: string;
-    type: string;
-    required?: boolean;
-    options?: string[];
-}
-
-interface ValidatedRow {
-    rowNumber: number;
-    data: Record<string, string>;
-}
-
-interface InvalidRow {
-    rowNumber: number;
-    data: Record<string, string>;
-    errors: string[];
-}
-
 const VALID_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'];
 const VALID_CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'];
 const MAX_ROWS = 1000;
+const PREVIEW_LIMIT = 20;
 
 /**
  * POST /api/tenants/[slug]/assets/import/validate
@@ -58,7 +49,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { tenant } = authResult;
+        const { user, tenant } = authResult;
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
+
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
         const categoryId = formData.get('categoryId') as string | null;
@@ -108,30 +107,65 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         }
 
         const fieldSchema = (category.fieldSchema as unknown as FieldDefinition[]) || [];
+        const rowContexts = toImportRowContexts(rows);
+        const validationErrorMap = new Map<number, string[]>();
 
-        const validRows: ValidatedRow[] = [];
-        const invalidRows: InvalidRow[] = [];
+        for (const row of rowContexts) {
+            const { valid, errors } = validateRow(
+                row.data as Record<string, string>,
+                fieldSchema
+            );
 
-        // Validate each row
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const rowNumber = i + 2; // Account for header + 1-based
-
-            const { valid, errors } = validateRow(row, fieldSchema);
-
-            if (valid) {
-                validRows.push({ rowNumber, data: row });
-            } else {
-                invalidRows.push({ rowNumber, data: row, errors });
+            if (!valid) {
+                validationErrorMap.set(row.rowNumber, errors);
             }
         }
 
+        const validationSafeRows = filterRowsWithoutErrors(
+            rowContexts,
+            validationErrorMap
+        );
+        const fileDuplicateErrorMap = findDuplicateIdentifierErrors(
+            validationSafeRows
+        );
+        const duplicateSafeRows = filterRowsWithoutErrors(
+            validationSafeRows,
+            fileDuplicateErrorMap
+        );
+        const existingConflictErrorMap = await findExistingIdentifierErrors(
+            db,
+            tenant.id,
+            duplicateSafeRows
+        );
+        const importableRows = filterRowsWithoutErrors(
+            duplicateSafeRows,
+            existingConflictErrorMap
+        );
+
         return NextResponse.json({
             totalRows: rows.length,
-            validCount: validRows.length,
-            invalidCount: invalidRows.length,
-            validRows,
-            invalidRows: invalidRows.slice(0, 50), // Limit preview
+            importableCount: importableRows.length,
+            blockedCount: rows.length - importableRows.length,
+            summary: {
+                validationErrors: validationErrorMap.size,
+                fileDuplicates: fileDuplicateErrorMap.size,
+                existingConflicts: existingConflictErrorMap.size,
+            },
+            importableRows: serializeImportableRows(importableRows),
+            blockedPreview: {
+                validationErrors: buildImportIssueRows(
+                    rowContexts,
+                    validationErrorMap
+                ).slice(0, PREVIEW_LIMIT),
+                fileDuplicates: buildImportIssueRows(
+                    validationSafeRows,
+                    fileDuplicateErrorMap
+                ).slice(0, PREVIEW_LIMIT),
+                existingConflicts: buildImportIssueRows(
+                    duplicateSafeRows,
+                    existingConflictErrorMap
+                ).slice(0, PREVIEW_LIMIT),
+            },
             categoryId,
             categoryName: category.name
         });

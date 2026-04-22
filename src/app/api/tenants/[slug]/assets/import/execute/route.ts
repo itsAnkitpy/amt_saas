@@ -8,6 +8,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
 import { handleApiError, badRequest } from '@/lib/api-error';
+import {
+    buildImportIssueRows,
+    findDuplicateIdentifierErrors,
+    findExistingIdentifierErrors,
+    toImportRowContexts,
+} from '@/lib/asset-import';
 import { logBulkAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { validateAndNormalizeCustomFields } from '@/lib/asset-service';
 import { Prisma } from '@/generated/prisma';
@@ -22,6 +28,7 @@ interface RouteParams {
 // FieldDefinition is imported from '@/lib/validations'
 
 const IMPORTABLE_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'] as const;
+const PREVIEW_LIMIT = 20;
 
 /**
  * POST /api/tenants/[slug]/assets/import/execute
@@ -62,6 +69,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         if ('error' in validated) return validated.error;
 
         const { categoryId, rows } = validated.data;
+        const rowContexts = toImportRowContexts(rows as Record<string, unknown>[]);
 
         // Fetch category with field schema
         const category = await db.assetCategory.findFirst({
@@ -77,31 +85,56 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         const fieldSchema = (category.fieldSchema as unknown as FieldDefinition[]) || [];
 
-        const invalidAssignedRow = rows.find((row) => {
-            const normalizedStatus = row.status?.trim().toUpperCase();
+        const invalidAssignedRow = rowContexts.find((row) => {
+            const rowData = row.data as ImportRow;
+            const normalizedStatus = rowData.status?.trim().toUpperCase();
             return normalizedStatus === 'ASSIGNED';
         });
 
         if (invalidAssignedRow) {
             return NextResponse.json(
                 {
-                    error: 'Bulk import cannot create assigned assets. Import them as AVAILABLE and use assign afterward.',
+                    error: `Row ${invalidAssignedRow.rowNumber}: Bulk import cannot create assigned assets. Import them as AVAILABLE and use assign afterward.`,
                 },
                 { status: 400 }
             );
         }
 
-        const invalidStatusRow = rows.find((row) => {
-            const normalizedStatus = row.status?.trim().toUpperCase();
+        const invalidStatusRow = rowContexts.find((row) => {
+            const rowData = row.data as ImportRow;
+            const normalizedStatus = rowData.status?.trim().toUpperCase();
             return normalizedStatus && !IMPORTABLE_STATUSES.includes(normalizedStatus as typeof IMPORTABLE_STATUSES[number]);
         });
 
         if (invalidStatusRow) {
             return NextResponse.json(
                 {
-                    error: `Invalid status in import rows. Allowed values: ${IMPORTABLE_STATUSES.join(', ')}.`,
+                    error: `Row ${invalidStatusRow.rowNumber}: Invalid status in import rows. Allowed values: ${IMPORTABLE_STATUSES.join(', ')}.`,
                 },
                 { status: 400 }
+            );
+        }
+
+        const fileDuplicateErrorMap = findDuplicateIdentifierErrors(rowContexts);
+        if (fileDuplicateErrorMap.size > 0) {
+            return NextResponse.json(
+                {
+                    error: 'Import could not be completed because the uploaded rows contain duplicate serial numbers or asset tags. Revalidate the file and try again.',
+                    summary: {
+                        validationErrors: 0,
+                        fileDuplicates: fileDuplicateErrorMap.size,
+                        existingConflicts: 0,
+                    },
+                    blockedPreview: {
+                        validationErrors: [],
+                        fileDuplicates: buildImportIssueRows(
+                            rowContexts,
+                            fileDuplicateErrorMap
+                        ).slice(0, PREVIEW_LIMIT),
+                        existingConflicts: [],
+                    },
+                },
+                { status: 409 }
             );
         }
 
@@ -109,7 +142,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const labelToKeyMap = new Map(fieldSchema.map(f => [f.label, f.key]));
 
         // Transform rows to asset data, validating custom fields against category schema
-        const assetsData = rows.map((row, index) => {
+        const assetsData = rowContexts.map((rowContext) => {
+            const row = rowContext.data as ImportRow;
             const rawCustomFields = extractCustomFields(row, fieldSchema, labelToKeyMap);
 
             // Validate and normalize custom fields using the same logic as asset create/update
@@ -121,7 +155,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 ) as Prisma.InputJsonValue;
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Invalid custom fields';
-                throw badRequest(`Row ${index + 1}: ${message}`);
+                throw badRequest(`Row ${rowContext.rowNumber}: ${message}`);
             }
 
             return {
@@ -141,34 +175,87 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             };
         });
 
-        // Batch create assets and log activity in a single transaction
-        const result = await db.$transaction(async (tx) => {
-            const createdAssets = await tx.asset.createManyAndReturn({
-                data: assetsData,
-                select: { id: true },
+        try {
+            // Batch create assets and log activity in a single transaction
+            const result = await db.$transaction(async (tx) => {
+                const existingConflictErrorMap = await findExistingIdentifierErrors(
+                    tx,
+                    tenant.id,
+                    rowContexts
+                );
+
+                if (existingConflictErrorMap.size > 0) {
+                    return {
+                        kind: 'conflict' as const,
+                        summary: {
+                            validationErrors: 0,
+                            fileDuplicates: 0,
+                            existingConflicts: existingConflictErrorMap.size,
+                        },
+                        blockedPreview: {
+                            validationErrors: [],
+                            fileDuplicates: [],
+                            existingConflicts: buildImportIssueRows(
+                                rowContexts,
+                                existingConflictErrorMap
+                            ).slice(0, PREVIEW_LIMIT),
+                        },
+                    };
+                }
+
+                const createdAssets = await tx.asset.createManyAndReturn({
+                    data: assetsData,
+                    select: { id: true },
+                });
+
+                // Log activity atomically with the creation
+                if (createdAssets.length > 0) {
+                    await logBulkAssetActivity(
+                        'CREATED',
+                        createdAssets.map(a => a.id),
+                        user.id,
+                        getUserDisplayName(user),
+                        tenant.id,
+                        { category: category.name, source: 'bulk_import' },
+                        tx
+                    );
+                }
+
+                return {
+                    kind: 'success' as const,
+                    count: createdAssets.length,
+                    categoryName: category.name,
+                };
             });
 
-            // Log activity atomically with the creation
-            if (createdAssets.length > 0) {
-                await logBulkAssetActivity(
-                    'CREATED',
-                    createdAssets.map(a => a.id),
-                    user.id,
-                    getUserDisplayName(user),
-                    tenant.id,
-                    { category: category.name, source: 'bulk_import' },
-                    tx
+            if (result.kind === 'conflict') {
+                return NextResponse.json(
+                    {
+                        error: 'Import could not be completed because some rows now conflict with existing assets. Please revalidate the file and try again.',
+                        summary: result.summary,
+                        blockedPreview: result.blockedPreview,
+                    },
+                    { status: 409 }
                 );
             }
 
-            return { count: createdAssets.length, categoryName: category.name };
-        });
+            return NextResponse.json({
+                success: true,
+                created: result.count,
+                categoryName: result.categoryName
+            });
+        } catch (error) {
+            if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+                return NextResponse.json(
+                    {
+                        error: 'Import could not be completed because matching serial numbers or asset tags were created while the import was running. Please revalidate and try again.',
+                    },
+                    { status: 409 }
+                );
+            }
 
-        return NextResponse.json({
-            success: true,
-            created: result.count,
-            categoryName: result.categoryName
-        });
+            throw error;
+        }
 
     } catch (error) {
         return handleApiError(error);

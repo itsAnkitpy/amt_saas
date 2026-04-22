@@ -34,12 +34,27 @@ interface Category {
     icon: string | null;
 }
 
+interface ImportIssueRow {
+    rowNumber: number;
+    data: Record<string, string>;
+    errors: string[];
+}
+
 interface ValidationResult {
     totalRows: number;
-    validCount: number;
-    invalidCount: number;
-    validRows: Array<{ rowNumber: number; data: Record<string, string> }>;
-    invalidRows: Array<{ rowNumber: number; data: Record<string, string>; errors: string[] }>;
+    importableCount: number;
+    blockedCount: number;
+    summary: {
+        validationErrors: number;
+        fileDuplicates: number;
+        existingConflicts: number;
+    };
+    importableRows: Array<{ rowNumber: number; data: Record<string, string> }>;
+    blockedPreview: {
+        validationErrors: ImportIssueRow[];
+        fileDuplicates: ImportIssueRow[];
+        existingConflicts: ImportIssueRow[];
+    };
     categoryId: string;
     categoryName: string;
 }
@@ -53,6 +68,102 @@ interface BulkImportModalProps {
 
 type Step = 'select' | 'upload' | 'preview' | 'complete';
 const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
+function getRowSummary(data: Record<string, string>) {
+    const parts: string[] = [];
+
+    if (data.name) {
+        parts.push(data.name);
+    }
+
+    if (data.serialNumber) {
+        parts.push(`SN ${data.serialNumber}`);
+    }
+
+    if (data.assetTag) {
+        parts.push(`Tag ${data.assetTag}`);
+    }
+
+    return parts.join(' • ') || 'Row data';
+}
+
+function IssuePreviewSection({
+    title,
+    description,
+    rows,
+    tone,
+}: {
+    title: string;
+    description: string;
+    rows: ImportIssueRow[];
+    tone: 'red' | 'amber' | 'orange';
+}) {
+    if (rows.length === 0) {
+        return null;
+    }
+
+    const toneClasses = {
+        red: {
+            border: 'border-red-200',
+            background: 'bg-red-50/50 dark:bg-red-950/10',
+            divider: 'divide-red-100 dark:divide-red-900/30',
+            badge: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300',
+            text: 'text-red-600 dark:text-red-400',
+        },
+        amber: {
+            border: 'border-amber-200',
+            background: 'bg-amber-50/50 dark:bg-amber-950/10',
+            divider: 'divide-amber-100 dark:divide-amber-900/30',
+            badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+            text: 'text-amber-700 dark:text-amber-300',
+        },
+        orange: {
+            border: 'border-orange-200',
+            background: 'bg-orange-50/50 dark:bg-orange-950/10',
+            divider: 'divide-orange-100 dark:divide-orange-900/30',
+            badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300',
+            text: 'text-orange-700 dark:text-orange-300',
+        },
+    } as const;
+
+    const classes = toneClasses[tone];
+
+    return (
+        <div className="space-y-2">
+            <div>
+                <p className={`text-sm font-medium ${classes.text}`}>{title}</p>
+                <p className="text-xs text-zinc-500">{description}</p>
+            </div>
+            <div className={`max-h-56 overflow-y-auto rounded-lg border ${classes.border} ${classes.background}`}>
+                <div className={`divide-y ${classes.divider}`}>
+                    {rows.map((row) => (
+                        <div key={row.rowNumber} className="px-4 py-3">
+                            <div className="flex items-start gap-3">
+                                <span
+                                    className={`inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-medium ${classes.badge}`}
+                                >
+                                    {row.rowNumber}
+                                </span>
+                                <div className="min-w-0 flex-1 space-y-1">
+                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                                        {getRowSummary(row.data)}
+                                    </p>
+                                    <ul className={`space-y-1 text-sm ${classes.text}`}>
+                                        {row.errors.map((error, idx) => (
+                                            <li key={idx} className="break-words">
+                                                • {error}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export function BulkImportModal({
     tenantSlug,
@@ -76,6 +187,8 @@ export function BulkImportModal({
         setValidationResult(null);
         setError(null);
         setImportResult(null);
+        setIsLoading(false);
+        setIsDragging(false);
         onClose();
     };
 
@@ -102,6 +215,8 @@ export function BulkImportModal({
 
         setIsLoading(true);
         setError(null);
+        setValidationResult(null);
+        setImportResult(null);
 
         try {
             const formData = new FormData();
@@ -132,7 +247,7 @@ export function BulkImportModal({
 
     // Execute import
     const executeImport = async () => {
-        if (!validationResult || validationResult.validCount === 0) return;
+        if (!validationResult || validationResult.importableCount === 0) return;
 
         setIsLoading(true);
         setError(null);
@@ -143,13 +258,59 @@ export function BulkImportModal({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     categoryId: validationResult.categoryId,
-                    rows: validationResult.validRows.map(r => r.data),
+                    rows: validationResult.importableRows.map((row) => ({
+                        ...row.data,
+                        __rowNumber: row.rowNumber,
+                    })),
                 }),
             });
 
             const result = await response.json();
 
             if (!response.ok) {
+                if (
+                    response.status === 409 &&
+                    validationResult &&
+                    result.summary &&
+                    result.blockedPreview
+                ) {
+                    const conflictCount =
+                        typeof result.summary.existingConflicts === 'number'
+                            ? result.summary.existingConflicts
+                            : 0;
+
+                    setValidationResult({
+                        ...validationResult,
+                        importableCount: Math.max(
+                            validationResult.importableCount - conflictCount,
+                            0
+                        ),
+                        blockedCount:
+                            validationResult.blockedCount + conflictCount,
+                        summary: {
+                            validationErrors:
+                                validationResult.summary.validationErrors,
+                            fileDuplicates:
+                                validationResult.summary.fileDuplicates,
+                            existingConflicts:
+                                validationResult.summary.existingConflicts +
+                                conflictCount,
+                        },
+                        blockedPreview: {
+                            validationErrors:
+                                validationResult.blockedPreview
+                                    .validationErrors,
+                            fileDuplicates:
+                                validationResult.blockedPreview.fileDuplicates,
+                            existingConflicts: [
+                                ...validationResult.blockedPreview
+                                    .existingConflicts,
+                                ...result.blockedPreview.existingConflicts,
+                            ].slice(0, 20),
+                        },
+                    });
+                }
+
                 setError(result.error || 'Import failed');
                 return;
             }
@@ -176,7 +337,6 @@ export function BulkImportModal({
         setIsDragging(false);
     }, []);
 
-    // Issue 1: Fixed dependency - use handleFileUpload in deps
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
@@ -190,6 +350,8 @@ export function BulkImportModal({
     }, [handleFileUpload]);
 
     const selectedCategoryName = categories.find(c => c.id === selectedCategory)?.name;
+    const readyCount = validationResult?.importableCount ?? 0;
+    const blockedCount = validationResult?.blockedCount ?? 0;
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
@@ -324,45 +486,69 @@ export function BulkImportModal({
                             <DialogTitle>Preview Import</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-6 py-4">
-                            <div className="flex items-center gap-4">
+                            <div className="flex flex-wrap items-center gap-3">
                                 <Badge variant="outline">{validationResult.categoryName}</Badge>
                                 <Badge className="bg-green-100 text-green-800">
                                     <CheckCircleIcon className="mr-1 h-3 w-3" />
-                                    {validationResult.validCount} valid
+                                    {validationResult.importableCount} ready
                                 </Badge>
-                                {validationResult.invalidCount > 0 && (
+                                {validationResult.summary.validationErrors > 0 && (
                                     <Badge className="bg-red-100 text-red-800">
                                         <AlertCircleIcon className="mr-1 h-3 w-3" />
-                                        {validationResult.invalidCount} errors
+                                        {validationResult.summary.validationErrors} validation issue{validationResult.summary.validationErrors === 1 ? '' : 's'}
+                                    </Badge>
+                                )}
+                                {validationResult.summary.fileDuplicates > 0 && (
+                                    <Badge className="bg-amber-100 text-amber-800">
+                                        <AlertCircleIcon className="mr-1 h-3 w-3" />
+                                        {validationResult.summary.fileDuplicates} duplicate{validationResult.summary.fileDuplicates === 1 ? '' : 's'} in file
+                                    </Badge>
+                                )}
+                                {validationResult.summary.existingConflicts > 0 && (
+                                    <Badge className="bg-orange-100 text-orange-800">
+                                        <AlertCircleIcon className="mr-1 h-3 w-3" />
+                                        {validationResult.summary.existingConflicts} existing conflict{validationResult.summary.existingConflicts === 1 ? '' : 's'}
                                     </Badge>
                                 )}
                             </div>
 
-                            {validationResult.invalidRows.length > 0 && (
-                                <div className="space-y-2">
-                                    <p className="text-sm font-medium text-red-600">
-                                        Errors (these rows will be skipped):
-                                    </p>
-                                    <div className="max-h-56 overflow-y-auto rounded-lg border border-red-200 bg-red-50/50 dark:bg-red-950/10">
-                                        <div className="divide-y divide-red-100 dark:divide-red-900/30">
-                                            {validationResult.invalidRows.map(row => (
-                                                <div key={row.rowNumber} className="px-4 py-3">
-                                                    <div className="flex items-start gap-3">
-                                                        <span className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-700 text-xs font-medium dark:bg-red-900/50">
-                                                            {row.rowNumber}
-                                                        </span>
-                                                        <ul className="flex-1 space-y-1 text-sm text-red-600 dark:text-red-400">
-                                                            {row.errors.map((error, idx) => (
-                                                                <li key={idx} className="break-words">
-                                                                    • {error}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+                            <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <p className="font-medium text-zinc-900 dark:text-white">
+                                    {blockedCount > 0
+                                        ? `${readyCount} row${readyCount === 1 ? '' : 's'} are ready to import. ${blockedCount} row${blockedCount === 1 ? '' : 's'} are blocked.`
+                                        : `All ${readyCount} row${readyCount === 1 ? '' : 's'} are ready to import.`}
+                                </p>
+                                <p className="mt-1 text-zinc-600 dark:text-zinc-400">
+                                    {blockedCount > 0
+                                        ? 'Only the ready rows will be imported. Fix the blocked rows and upload the file again to bring them in too.'
+                                        : 'No blocking issues found in this file.'}
+                                </p>
+                            </div>
+
+                            <div className="space-y-4">
+                                <IssuePreviewSection
+                                    title="Validation issues"
+                                    description="These rows have missing or invalid field values and cannot be imported yet."
+                                    rows={validationResult.blockedPreview.validationErrors}
+                                    tone="red"
+                                />
+                                <IssuePreviewSection
+                                    title="Duplicate identifiers in this file"
+                                    description="These rows reuse a serial number or asset tag somewhere else in the same CSV."
+                                    rows={validationResult.blockedPreview.fileDuplicates}
+                                    tone="amber"
+                                />
+                                <IssuePreviewSection
+                                    title="Conflicts with existing assets"
+                                    description="These rows use a serial number or asset tag that already exists in this tenant."
+                                    rows={validationResult.blockedPreview.existingConflicts}
+                                    tone="orange"
+                                />
+                            </div>
+
+                            {blockedCount === 0 && readyCount > 0 && (
+                                <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-300">
+                                    Everything looks good. This import can proceed as-is.
                                 </div>
                             )}
 
@@ -379,7 +565,7 @@ export function BulkImportModal({
                                 </Button>
                                 <Button
                                     onClick={executeImport}
-                                    disabled={isLoading || validationResult.validCount === 0}
+                                    disabled={isLoading || validationResult.importableCount === 0}
                                 >
                                     {isLoading ? (
                                         <>
@@ -389,7 +575,7 @@ export function BulkImportModal({
                                     ) : (
                                         <>
                                             <UploadIcon className="mr-2 h-4 w-4" />
-                                            Import {validationResult.validCount} Assets
+                                            Import {validationResult.importableCount} {validationResult.blockedCount > 0 ? 'Ready Rows' : 'Assets'}
                                         </>
                                     )}
                                 </Button>
@@ -415,6 +601,15 @@ export function BulkImportModal({
                                 <p className="text-sm text-zinc-500">
                                     Added to {importResult.categoryName}
                                 </p>
+                                {validationResult?.blockedCount ? (
+                                    <p className="mt-2 text-sm text-zinc-500">
+                                        {validationResult.blockedCount} blocked row{validationResult.blockedCount === 1 ? '' : 's'} were skipped. Fix them and upload the file again to import the rest.
+                                    </p>
+                                ) : (
+                                    <p className="mt-2 text-sm text-zinc-500">
+                                        All rows from this upload were imported successfully.
+                                    </p>
+                                )}
                             </div>
                             <Button onClick={handleClose}>
                                 Done
