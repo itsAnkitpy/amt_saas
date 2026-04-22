@@ -2,10 +2,10 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2Icon, TrashIcon, UserMinusIcon } from "lucide-react";
+import { Loader2Icon, RotateCcwIcon, TrashIcon, UserMinusIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { deleteAsset, unassignAsset } from "../actions";
+import { deleteAsset, restoreAsset, unassignAsset } from "../actions";
 
 interface AssetActionButtonProps {
     assetId: string;
@@ -80,6 +80,44 @@ export function ArchiveAssetButton({
                 <TrashIcon className="mr-2 h-4 w-4" />
             )}
             Archive Asset
+        </Button>
+    );
+}
+
+export function RestoreAssetButton({
+    assetId,
+    tenantSlug,
+}: AssetActionButtonProps) {
+    const router = useRouter();
+    const [isPending, startTransition] = useTransition();
+
+    const handleRestore = () => {
+        startTransition(async () => {
+            const result = await restoreAsset(tenantSlug, assetId);
+
+            if (result?.error) {
+                toast.error(result.error);
+                return;
+            }
+
+            toast.success("Asset restored");
+            router.refresh();
+        });
+    };
+
+    return (
+        <Button
+            type="button"
+            variant="outline"
+            onClick={handleRestore}
+            disabled={isPending}
+        >
+            {isPending ? (
+                <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+                <RotateCcwIcon className="mr-2 h-4 w-4" />
+            )}
+            Restore Asset
         </Button>
     );
 }

@@ -329,6 +329,12 @@ function assertAssetNotArchived(asset: { archivedAt: Date | null }) {
     }
 }
 
+function assertAssetIsArchived(asset: { archivedAt: Date | null }) {
+    if (!asset.archivedAt) {
+        throw badRequest("Asset is not archived");
+    }
+}
+
 function dedupeAssetIds(assetIds: string[]) {
     return Array.from(new Set(assetIds));
 }
@@ -596,6 +602,60 @@ export async function deleteAssetForTenant(
                 details: {
                     reason: "soft_delete",
                     archivedAt: archivedAt.toISOString(),
+                },
+            },
+            tx
+        );
+
+        return asset;
+    });
+}
+
+export async function restoreAssetForTenant(
+    tenantSlug: string,
+    assetId: string
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+
+    return db.$transaction(async (tx) => {
+        const asset = await tx.asset.findFirst({
+            where: {
+                id: assetId,
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                status: true,
+                archivedAt: true,
+            },
+        });
+
+        if (!asset) {
+            throw notFound("Asset not found");
+        }
+
+        assertAssetIsArchived(asset);
+
+        const restoredAt = new Date();
+
+        await tx.asset.update({
+            where: { id: asset.id },
+            data: {
+                status: "AVAILABLE",
+                archivedAt: null,
+            },
+        });
+
+        await logAssetActivity(
+            {
+                action: "RESTORED",
+                assetId: asset.id,
+                userId: user.id,
+                userName: getUserDisplayName(user),
+                tenantId: tenant.id,
+                details: {
+                    previousStatus: asset.status,
+                    restoredAt: restoredAt.toISOString(),
                 },
             },
             tx
@@ -1087,6 +1147,66 @@ export async function bulkDeleteAssetsForTenant(
             {
                 reason: "bulk_soft_delete",
                 archivedAt: archivedAt.toISOString(),
+            },
+            tx
+        );
+
+        return { count: result.count };
+    });
+}
+
+export async function bulkRestoreAssetsForTenant(
+    tenantSlug: string,
+    assetIds: string[]
+) {
+    const { tenant, user } = await requireAssetManagerContext(tenantSlug);
+    const uniqueAssetIds = dedupeAssetIds(assetIds);
+
+    return db.$transaction(async (tx) => {
+        const assets = await tx.asset.findMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            select: {
+                id: true,
+                archivedAt: true,
+            },
+        });
+
+        if (assets.length !== uniqueAssetIds.length) {
+            throw notFound("Some assets not found or do not belong to this tenant");
+        }
+
+        const activeCount = assets.filter((asset) => !asset.archivedAt).length;
+
+        if (activeCount > 0) {
+            throw badRequest(
+                `${activeCount} selected asset(s) are not archived.`
+            );
+        }
+
+        const restoredAt = new Date();
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: {
+                status: "AVAILABLE",
+                archivedAt: null,
+            },
+        });
+
+        await logBulkAssetActivity(
+            "RESTORED",
+            uniqueAssetIds,
+            user.id,
+            getUserDisplayName(user),
+            tenant.id,
+            {
+                restoredAt: restoredAt.toISOString(),
+                restoredTo: "AVAILABLE",
             },
             tx
         );

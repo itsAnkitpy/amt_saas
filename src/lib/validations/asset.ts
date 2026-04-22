@@ -27,7 +27,7 @@ export const AssetConditionSchema = z.enum([
  * Schema for bulk asset operations
  */
 export const BulkActionSchema = z.object({
-    action: z.enum(['update_status', 'assign', 'unassign', 'delete']),
+    action: z.enum(['update_status', 'assign', 'unassign', 'delete', 'restore']),
     assetIds: z
         .array(CuidSchema)
         .min(1, 'At least one asset must be selected')

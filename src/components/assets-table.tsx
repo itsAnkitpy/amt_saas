@@ -36,6 +36,7 @@ import {
     ImageIcon,
     ChevronDownIcon,
     CheckCircleIcon,
+    RotateCcwIcon,
     WrenchIcon,
     ArchiveIcon,
     Loader2Icon,
@@ -137,7 +138,9 @@ export function AssetsTable({
     showArchived = false,
 }: AssetsTableProps) {
     const router = useRouter();
-    const canMutateAssets = canManageAssets && !showArchived;
+    const canManageActiveAssets = canManageAssets && !showArchived;
+    const canManageArchivedAssets = canManageAssets && showArchived;
+    const canSelectAssets = canManageAssets;
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isLoading, setIsLoading] = useState(false);
     const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
@@ -169,6 +172,14 @@ export function AssetsTable({
     const isAllSelected = assets.length > 0 && selectedIds.size === assets.length;
     const isSomeSelected = selectedIds.size > 0 && selectedIds.size < assets.length;
 
+    const successMessages: Record<string, string> = {
+        update_status: 'Successfully updated',
+        assign: 'Successfully assigned',
+        unassign: 'Successfully unassigned',
+        delete: 'Successfully archived',
+        restore: 'Successfully restored',
+    };
+
     // Execute bulk action (called after confirmation)
     const executeBulkAction = async (action: string, data?: Record<string, unknown>) => {
         if (selectedIds.size === 0) return;
@@ -188,7 +199,7 @@ export function AssetsTable({
             if (response.ok) {
                 const result = await response.json();
                 setSelectedIds(new Set());
-                toast.success(`Successfully updated ${result.count} asset(s)`);
+                toast.success(`${successMessages[action] || 'Successfully updated'} ${result.count} asset(s)`);
                 router.refresh();
             } else {
                 const error = await response.json();
@@ -241,6 +252,15 @@ export function AssetsTable({
             action: 'delete',
             title: 'Archive Assets',
             description: 'This will archive the selected assets and remove them from the active inventory list. Assigned assets cannot be archived - unassign them first.'
+        });
+    };
+
+    // Request restore confirmation
+    const requestRestore = () => {
+        setPendingAction({
+            action: 'restore',
+            title: 'Restore Assets',
+            description: 'This will restore the selected archived assets back into active inventory as available assets.'
         });
     };
 
@@ -309,7 +329,7 @@ export function AssetsTable({
         <>
             {/* Confirmation Dialog */}
             <AlertDialog
-                open={canMutateAssets && !!pendingAction}
+                open={canSelectAssets && !!pendingAction}
                 onOpenChange={() => setPendingAction(null)}
             >
                 <AlertDialogContent>
@@ -338,7 +358,7 @@ export function AssetsTable({
             </AlertDialog>
 
             {/* Import Modal */}
-            {canMutateAssets && (
+            {canManageActiveAssets && (
                 <BulkImportModal
                     tenantSlug={tenantSlug}
                     categories={categories}
@@ -349,7 +369,7 @@ export function AssetsTable({
 
             {/* Assign Modal */}
             <Dialog
-                open={canMutateAssets && isAssignModalOpen}
+                open={canManageActiveAssets && isAssignModalOpen}
                 onOpenChange={(open) => {
                     setIsAssignModalOpen(open);
                     if (!open) setSelectedUserId('');
@@ -394,7 +414,7 @@ export function AssetsTable({
 
             <div className="space-y-4">
                 {/* Toolbar with Import button */}
-                {canMutateAssets && (
+                {canManageActiveAssets && (
                     <div className="flex justify-end">
                         <Button
                             variant="outline"
@@ -407,60 +427,72 @@ export function AssetsTable({
                 )}
 
                 {/* Floating Action Bar - shown when items selected */}
-                {canMutateAssets && selectedIds.size > 0 && (
+                {canSelectAssets && selectedIds.size > 0 && (
                     <div className="sticky top-0 z-10 flex items-center justify-between rounded-lg border bg-white p-3 shadow-sm dark:bg-zinc-900">
                         <span className="text-sm font-medium">
                             {selectedIds.size} asset{selectedIds.size > 1 ? 's' : ''} selected
                         </span>
                         <div className="flex items-center gap-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" disabled={isLoading}>
-                                        {isLoading ? (
-                                            <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <ChevronDownIcon className="mr-2 h-4 w-4" />
-                                        )}
-                                        Change Status
+                            {canManageActiveAssets ? (
+                                <>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm" disabled={isLoading}>
+                                                {isLoading ? (
+                                                    <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <ChevronDownIcon className="mr-2 h-4 w-4" />
+                                                )}
+                                                Change Status
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                            <DropdownMenuItem onClick={() => requestStatusChange('AVAILABLE')}>
+                                                <CheckCircleIcon className="mr-2 h-4 w-4 text-green-600" />
+                                                Mark Available
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => requestStatusChange('MAINTENANCE')}>
+                                                <WrenchIcon className="mr-2 h-4 w-4 text-yellow-600" />
+                                                Mark Maintenance
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => requestStatusChange('RETIRED')}>
+                                                <ArchiveIcon className="mr-2 h-4 w-4 text-zinc-600" />
+                                                Mark Retired
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isLoading}
+                                        onClick={() => setIsAssignModalOpen(true)}
+                                    >
+                                        <UserPlusIcon className="mr-2 h-4 w-4" />
+                                        Assign
                                     </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuItem onClick={() => requestStatusChange('AVAILABLE')}>
-                                        <CheckCircleIcon className="mr-2 h-4 w-4 text-green-600" />
-                                        Mark Available
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => requestStatusChange('MAINTENANCE')}>
-                                        <WrenchIcon className="mr-2 h-4 w-4 text-yellow-600" />
-                                        Mark Maintenance
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => requestStatusChange('RETIRED')}>
-                                        <ArchiveIcon className="mr-2 h-4 w-4 text-zinc-600" />
-                                        Mark Retired
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
 
-                            {/* Assign Button */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={isLoading}
-                                onClick={() => setIsAssignModalOpen(true)}
-                            >
-                                <UserPlusIcon className="mr-2 h-4 w-4" />
-                                Assign
-                            </Button>
-
-                            {/* Unassign Button */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={isLoading}
-                                onClick={requestUnassign}
-                            >
-                                <UserMinusIcon className="mr-2 h-4 w-4" />
-                                Unassign
-                            </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={isLoading}
+                                        onClick={requestUnassign}
+                                    >
+                                        <UserMinusIcon className="mr-2 h-4 w-4" />
+                                        Unassign
+                                    </Button>
+                                </>
+                            ) : canManageArchivedAssets ? (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={isLoading}
+                                    onClick={requestRestore}
+                                >
+                                    <RotateCcwIcon className="mr-2 h-4 w-4" />
+                                    Restore
+                                </Button>
+                            ) : null}
 
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -480,16 +512,17 @@ export function AssetsTable({
                                 </DropdownMenuContent>
                             </DropdownMenu>
 
-                            {/* Delete Button */}
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                disabled={isLoading}
-                                onClick={requestDelete}
-                            >
-                                <TrashIcon className="mr-2 h-4 w-4" />
-                                Delete
-                            </Button>
+                            {canManageActiveAssets && (
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    disabled={isLoading}
+                                    onClick={requestDelete}
+                                >
+                                    <TrashIcon className="mr-2 h-4 w-4" />
+                                    Delete
+                                </Button>
+                            )}
 
                             <Button
                                 variant="ghost"
@@ -507,7 +540,7 @@ export function AssetsTable({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                {canMutateAssets && (
+                                {canSelectAssets && (
                                     <TableHead className="w-12">
                                         <Checkbox
                                             checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
@@ -529,7 +562,7 @@ export function AssetsTable({
                             {assets.length === 0 ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={canMutateAssets ? 8 : 7}
+                                        colSpan={canSelectAssets ? 8 : 7}
                                         className="py-12 text-center"
                                     >
                                         <p className="text-zinc-500">No assets found</p>
@@ -544,12 +577,12 @@ export function AssetsTable({
                                         <TableRow
                                             key={asset.id}
                                             className={
-                                                canMutateAssets && isSelected
+                                                canSelectAssets && isSelected
                                                     ? 'bg-violet-50 dark:bg-violet-950/20'
                                                     : ''
                                             }
                                         >
-                                            {canMutateAssets && (
+                                            {canSelectAssets && (
                                                 <TableCell>
                                                     <Checkbox
                                                         checked={isSelected}

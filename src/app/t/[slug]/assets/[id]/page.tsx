@@ -16,6 +16,7 @@ import { AssignmentModal } from "./assignment-modal";
 import { AssetImagesSection } from "./asset-images-section";
 import {
     ArchiveAssetButton,
+    RestoreAssetButton,
     UnassignAssetButton,
 } from "./asset-action-buttons";
 import { ActivityTimeline } from "@/components/activity-timeline";
@@ -70,6 +71,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
     const canManageAssets = hasRole(user, "MANAGER");
     const isArchived = Boolean(asset.archivedAt);
     const canManageCurrentAsset = canManageAssets && !isArchived;
+    const canRestoreCurrentAsset = canManageAssets && isArchived;
     const users = canManageCurrentAsset
         ? await db.user.findMany({
             where: { tenantId: tenant.id, isActive: true },
@@ -103,23 +105,27 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                     </div>
                 </div>
 
-                {canManageCurrentAsset && (
+                {(canManageCurrentAsset || canRestoreCurrentAsset) && (
                     <div className="flex gap-2">
-                        {asset.status === "AVAILABLE" ? (
+                        {canManageCurrentAsset && asset.status === "AVAILABLE" ? (
                             <AssignmentModal
                                 assetId={asset.id}
                                 tenantSlug={slug}
                                 users={users}
                             />
-                        ) : asset.status === "ASSIGNED" ? (
+                        ) : canManageCurrentAsset && asset.status === "ASSIGNED" ? (
                             <UnassignAssetButton assetId={id} tenantSlug={slug} />
+                        ) : canRestoreCurrentAsset ? (
+                            <RestoreAssetButton assetId={id} tenantSlug={slug} />
                         ) : null}
-                        <Link href={`/t/${slug}/assets/${id}/edit`}>
-                            <Button variant="outline" size="sm">
-                                <PencilIcon className="mr-2 h-4 w-4" />
-                                Edit
-                            </Button>
-                        </Link>
+                        {canManageCurrentAsset && (
+                            <Link href={`/t/${slug}/assets/${id}/edit`}>
+                                <Button variant="outline" size="sm">
+                                    <PencilIcon className="mr-2 h-4 w-4" />
+                                    Edit
+                                </Button>
+                            </Link>
+                        )}
                     </div>
                 )}
             </div>
@@ -142,6 +148,11 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                     This asset is archived and read-only in the normal app flow.
                     {asset.archivedAt && (
                         <> Archived on {new Date(asset.archivedAt).toLocaleDateString()}.</>
+                    )}
+                    {canRestoreCurrentAsset && (
+                        <span className="block mt-2">
+                            Restore it to return the asset to active inventory as available.
+                        </span>
                     )}
                 </div>
             )}

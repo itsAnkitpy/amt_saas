@@ -62,6 +62,7 @@ const actionTypes = [
     { value: 'UNASSIGNED', label: 'Unassigned' },
     { value: 'STATUS_CHANGED', label: 'Status Changed' },
     { value: 'DELETED', label: 'Deleted' },
+    { value: 'RESTORED', label: 'Restored' },
     { value: 'IMAGE_ADDED', label: 'Image Added' },
     { value: 'IMAGE_REMOVED', label: 'Image Removed' },
 ];

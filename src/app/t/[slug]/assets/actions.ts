@@ -7,6 +7,7 @@ import {
     createAssetForTenant,
     deleteAssetForTenant,
     getAssetServiceErrorMessage,
+    restoreAssetForTenant,
     unassignAssetForTenant,
     updateAssetForTenant,
 } from "@/lib/asset-service";
@@ -74,6 +75,26 @@ export async function deleteAsset(tenantSlug: string, assetId: string) {
 
     revalidatePath(`/t/${tenantSlug}/assets`);
     redirect(`/t/${tenantSlug}/assets`);
+}
+
+/**
+ * Restore an archived asset
+ */
+export async function restoreAsset(tenantSlug: string, assetId: string) {
+    try {
+        await restoreAssetForTenant(tenantSlug, assetId);
+    } catch (error) {
+        return {
+            error: getAssetServiceErrorMessage(
+                error,
+                "Failed to restore asset"
+            ),
+        };
+    }
+
+    revalidatePath(`/t/${tenantSlug}/assets`);
+    revalidatePath(`/t/${tenantSlug}/assets/${assetId}`);
+    revalidatePath(`/t/${tenantSlug}/dashboard`);
 }
 
 /**

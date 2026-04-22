@@ -10,6 +10,7 @@ import { handleApiError } from '@/lib/api-error';
 import {
     bulkAssignAssetsForTenant,
     bulkDeleteAssetsForTenant,
+    bulkRestoreAssetsForTenant,
     bulkUnassignAssetsForTenant,
     bulkUpdateAssetStatusForTenant,
 } from '@/lib/asset-service';
@@ -108,6 +109,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
             case 'delete':
                 result = await bulkDeleteAssetsForTenant(slug, assetIds);
+                break;
+
+            case 'restore':
+                result = await bulkRestoreAssetsForTenant(slug, assetIds);
                 break;
 
             default:
