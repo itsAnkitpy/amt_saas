@@ -26,6 +26,8 @@ interface FieldDefinition {
     options?: string[];
 }
 
+const IMPORTABLE_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'] as const;
+
 /**
  * POST /api/tenants/[slug]/assets/import/execute
  * Create assets from validated import data
@@ -79,6 +81,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         }
 
         const fieldSchema = (category.fieldSchema as unknown as FieldDefinition[]) || [];
+
+        const invalidAssignedRow = rows.find((row) => {
+            const normalizedStatus = row.status?.trim().toUpperCase();
+            return normalizedStatus === 'ASSIGNED';
+        });
+
+        if (invalidAssignedRow) {
+            return NextResponse.json(
+                {
+                    error: 'Bulk import cannot create assigned assets. Import them as AVAILABLE and use assign afterward.',
+                },
+                { status: 400 }
+            );
+        }
+
+        const invalidStatusRow = rows.find((row) => {
+            const normalizedStatus = row.status?.trim().toUpperCase();
+            return normalizedStatus && !IMPORTABLE_STATUSES.includes(normalizedStatus as typeof IMPORTABLE_STATUSES[number]);
+        });
+
+        if (invalidStatusRow) {
+            return NextResponse.json(
+                {
+                    error: `Invalid status in import rows. Allowed values: ${IMPORTABLE_STATUSES.join(', ')}.`,
+                },
+                { status: 400 }
+            );
+        }
 
         // Build label-to-key map for custom fields
         const labelToKeyMap = new Map(fieldSchema.map(f => [f.label, f.key]));

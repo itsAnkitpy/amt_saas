@@ -81,17 +81,34 @@ export async function createUserForTenant(tenantId: string, formData: FormData) 
         throw new Error("Failed to create user. Please try again.");
     }
 
-    // Create user in our database (outside try-catch so redirect works)
-    await db.user.create({
-        data: {
-            id: clerkUserId,
-            email,
-            firstName,
-            lastName: lastName || null,
-            role: role || "USER",
-            tenantId,
-        },
-    });
+    try {
+        await db.user.create({
+            data: {
+                id: clerkUserId,
+                email,
+                firstName,
+                lastName: lastName || null,
+                role: role || "USER",
+                tenantId,
+            },
+        });
+    } catch (error) {
+        console.error("Error creating database user:", error);
+
+        try {
+            const clerk = await clerkClient();
+            await clerk.users.deleteUser(clerkUserId);
+            console.log("Rolled back Clerk user after database failure");
+        } catch (rollbackError) {
+            console.error("Failed to roll back Clerk user:", rollbackError);
+        }
+
+        throw new Error(
+            error instanceof Error
+                ? error.message
+                : "Failed to create user in database"
+        );
+    }
 
     console.log("Database user created");
 

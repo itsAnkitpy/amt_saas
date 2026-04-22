@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { checkTenantAccessForApi } from '@/lib/auth';
+import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
 import { logAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import { getStorage } from '@/lib/storage';
 
@@ -35,7 +35,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { tenant } = authResult;
+        const { tenant, user } = authResult;
+
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
 
         // Find image and verify it belongs to this tenant's asset
         const image = await db.assetImage.findFirst({
@@ -105,8 +113,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         await logAssetActivity({
             action: 'IMAGE_REMOVED',
             assetId,
-            userId: authResult.user.id,
-            userName: getUserDisplayName(authResult.user),
+            userId: user.id,
+            userName: getUserDisplayName(user),
             tenantId: tenant.id,
             details: { fileName: image.fileName }
         });
@@ -140,7 +148,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { tenant } = authResult;
+        const { tenant, user } = authResult;
+
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
 
         // Parse body
         const body = await request.json();

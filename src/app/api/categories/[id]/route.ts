@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, hasRole } from "@/lib/auth";
 
 export async function GET(
     request: NextRequest,
@@ -24,6 +24,10 @@ export async function GET(
 
     if (!category) {
         return NextResponse.json({ error: "Category not found" }, { status: 404 });
+    }
+
+    if (!hasRole(user, "ADMIN")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Check access - must be same tenant or superadmin

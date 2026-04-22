@@ -122,7 +122,10 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     // Stats
     const stats = await db.asset.groupBy({
         by: ["status"],
-        where: { tenantId: tenant.id },
+        where: {
+            tenantId: tenant.id,
+            archivedAt: showArchived ? { not: null } : null,
+        },
         _count: true,
     });
 

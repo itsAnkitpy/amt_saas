@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import dashboardPreview from "../../public/dashboard.png";
 import {
   CheckCircle2,
   ChevronRight,
@@ -88,13 +89,13 @@ const SOCIAL_PROOF_LOGOS = [
 
 const TESTIMONIALS = [
   {
-    quote: "Before AMT, we were managing assets across 12 locations using spreadsheets. We'd lose track of equipment constantly. Now we have 100% visibility.",
+    quote: "Before AssetLane, we were managing assets across 12 locations using spreadsheets. We'd lose track of equipment constantly. Now we have 100% visibility.",
     author: "Sarah Chen",
     role: "Director of Operations",
     company: "Acme Manufacturing"
   },
   {
-    quote: "We implemented AMT in 2 weeks and saw results immediately. Reduced asset loss by 60% and saved over $200,000 in the first year.",
+    quote: "We implemented AssetLane in 2 weeks and saw results immediately. Reduced asset loss by 60% and saved over $200,000 in the first year.",
     author: "Michael Ross",
     role: "IT Director",
     company: "Vertex Systems"
@@ -175,7 +176,7 @@ export default async function Home() {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-white transition-transform group-hover:scale-105">
               <LayoutDashboard className="h-5 w-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">AMT</span>
+            <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">AssetLane</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
@@ -242,13 +243,13 @@ export default async function Home() {
             </div>
 
             {/* Hero Image Mockup */}
-            <div className="mt-16 relative mx-auto max-w-5xl rounded-2xl border border-zinc-200 bg-zinc-50/50 p-2 sm:p-4 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900/50">
-              <div className="aspect-[16/9] overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 relative group">
+            <div className="mt-16 relative mx-auto w-full max-w-6xl rounded-2xl border border-zinc-200 bg-zinc-50/50 p-2 sm:p-4 shadow-2xl dark:border-zinc-800 dark:bg-zinc-900/50">
+              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                 <Image
-                  src="/dashboard.png"
-                  alt="AMT Dashboard Preview"
-                  fill
-                  className="object-cover"
+                  src={dashboardPreview}
+                  alt="AssetLane dashboard preview"
+                  className="h-auto w-full object-contain"
+                  sizes="(min-width: 1280px) 72rem, (min-width: 768px) 92vw, 100vw"
                   priority
                 />
               </div>
@@ -473,7 +474,7 @@ export default async function Home() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
                   <LayoutDashboard className="h-4 w-4" />
                 </div>
-                <span className="text-xl font-bold text-zinc-900 dark:text-white">AMT</span>
+                <span className="text-xl font-bold text-zinc-900 dark:text-white">AssetLane</span>
               </Link>
               <p className="max-w-xs text-sm text-zinc-500 leading-relaxed">
                 The modern asset management platform for forward-thinking operations teams.
@@ -510,7 +511,7 @@ export default async function Home() {
 
           <div className="border-t border-zinc-100 pt-8 dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-zinc-500">
-              © {new Date().getFullYear()} AMT SaaS. All rights reserved.
+              © {new Date().getFullYear()} AssetLane. All rights reserved.
             </p>
             <div className="flex gap-6">
               {/* Social icons would go here */}

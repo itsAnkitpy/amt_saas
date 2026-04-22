@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireTenantAccess } from "@/lib/auth";
+import { hasRole, requireTenantAccess } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { redirect } from "next/navigation";
 import {
     Table,
     TableBody,
@@ -22,7 +23,11 @@ interface CategoriesPageProps {
  */
 export default async function CategoriesPage({ params }: CategoriesPageProps) {
     const { slug } = await params;
-    const { tenant } = await requireTenantAccess(slug);
+    const { tenant, user } = await requireTenantAccess(slug);
+
+    if (!hasRole(user, "ADMIN")) {
+        redirect(`/t/${slug}/dashboard`);
+    }
 
     // Fetch categories with asset count
     const categories = await db.assetCategory.findMany({

@@ -30,7 +30,7 @@ export default async function DashboardPage() {
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
             {/* Header */}
             <header className="flex items-center justify-between border-b bg-white px-6 py-4 dark:bg-zinc-900">
-                <h1 className="text-xl font-bold">AMT SaaS</h1>
+                <h1 className="text-xl font-bold">AssetLane</h1>
                 <div className="flex items-center gap-4">
                     {dbUser?.isSuperAdmin && (
                         <Link

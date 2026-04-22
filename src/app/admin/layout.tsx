@@ -31,7 +31,7 @@ export default async function AdminLayout({
                 {/* Logo */}
                 <div className="flex h-16 items-center gap-2 border-b border-zinc-800 px-6">
                     <BoxIcon className="h-6 w-6" />
-                    <span className="font-bold">AMT Admin</span>
+                    <span className="font-bold">AssetLane Admin</span>
                 </div>
 
                 {/* Navigation */}

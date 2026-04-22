@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AMT SaaS - Asset Management",
+  title: "AssetLane - Asset Management",
   description: "Modern asset management for teams",
 };
 

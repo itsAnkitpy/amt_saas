@@ -34,7 +34,7 @@ interface InvalidRow {
     errors: string[];
 }
 
-const VALID_STATUSES = ['AVAILABLE', 'ASSIGNED', 'MAINTENANCE', 'RETIRED'];
+const VALID_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'];
 const VALID_CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'];
 const MAX_ROWS = 1000;
 

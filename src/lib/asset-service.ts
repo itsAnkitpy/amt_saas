@@ -10,6 +10,7 @@ import { Prisma } from "@/generated/prisma";
 import {
     CreateAssetSchema,
     type CreateAsset,
+    type FieldDefinition as CategoryFieldDefinition,
     validate,
 } from "@/lib/validations";
 
@@ -79,6 +80,120 @@ function parseAssetFormData(formData: FormData): CreateAsset {
     return result.data;
 }
 
+function isEmptyCustomFieldValue(value: unknown) {
+    return (
+        value === null ||
+        value === undefined ||
+        (typeof value === "string" && value.trim().length === 0)
+    );
+}
+
+function normalizeCustomFieldValue(
+    field: CategoryFieldDefinition,
+    rawValue: unknown
+) {
+    switch (field.type) {
+        case "text":
+        case "textarea": {
+            if (typeof rawValue !== "string") {
+                throw new Error(`${field.label} must be text`);
+            }
+
+            return rawValue.trim();
+        }
+
+        case "number": {
+            if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+                return rawValue;
+            }
+
+            if (typeof rawValue === "string") {
+                const trimmed = rawValue.trim();
+                const parsed = Number(trimmed);
+
+                if (trimmed.length > 0 && Number.isFinite(parsed)) {
+                    return parsed;
+                }
+            }
+
+            throw new Error(`${field.label} must be a number`);
+        }
+
+        case "select": {
+            if (typeof rawValue !== "string") {
+                throw new Error(`${field.label} must be text`);
+            }
+
+            const selected = rawValue.trim();
+            if (field.options?.length && !field.options.includes(selected)) {
+                throw new Error(
+                    `${field.label} must be one of: ${field.options.join(", ")}`
+                );
+            }
+
+            return selected;
+        }
+
+        case "date": {
+            if (typeof rawValue !== "string") {
+                throw new Error(`${field.label} must be a valid date`);
+            }
+
+            const trimmed = rawValue.trim();
+            if (Number.isNaN(Date.parse(trimmed))) {
+                throw new Error(`${field.label} must be a valid date`);
+            }
+
+            return trimmed;
+        }
+
+        case "boolean": {
+            if (typeof rawValue === "boolean") {
+                return rawValue;
+            }
+
+            if (typeof rawValue === "string") {
+                const normalized = rawValue.trim().toLowerCase();
+                if (normalized === "true") return true;
+                if (normalized === "false") return false;
+            }
+
+            throw new Error(`${field.label} must be true or false`);
+        }
+    }
+}
+
+function validateAndNormalizeCustomFields(
+    customFields: Record<string, unknown> | null | undefined,
+    fieldSchema: CategoryFieldDefinition[]
+) {
+    if (!customFields) {
+        customFields = {};
+    }
+
+    if (typeof customFields !== "object" || Array.isArray(customFields)) {
+        throw new Error("Invalid custom fields format");
+    }
+
+    const normalizedFields: Record<string, unknown> = {};
+
+    for (const field of fieldSchema) {
+        const rawValue = customFields[field.key];
+
+        if (isEmptyCustomFieldValue(rawValue)) {
+            if (field.required) {
+                throw new Error(`${field.label} is required`);
+            }
+
+            continue;
+        }
+
+        normalizedFields[field.key] = normalizeCustomFieldValue(field, rawValue);
+    }
+
+    return normalizedFields;
+}
+
 async function requireAssetManagerContext(
     tenantSlug: string
 ): Promise<AssetServiceContext> {
@@ -104,6 +219,7 @@ async function getCategoryForTenantOrThrow(
         select: {
             id: true,
             name: true,
+            fieldSchema: true,
         },
     });
 
@@ -111,7 +227,10 @@ async function getCategoryForTenantOrThrow(
         throw notFound("Category not found");
     }
 
-    return category;
+    return {
+        ...category,
+        fieldSchema: category.fieldSchema as unknown as CategoryFieldDefinition[],
+    };
 }
 
 async function ensureIdentifiersAreUnique(
@@ -231,6 +350,10 @@ export async function createAssetForTenant(
             assetData.categoryId,
             tenant.id
         );
+        const normalizedCustomFields = validateAndNormalizeCustomFields(
+            assetData.customFields,
+            category.fieldSchema
+        );
 
         await ensureIdentifiersAreUnique(
             tx,
@@ -253,7 +376,7 @@ export async function createAssetForTenant(
                 purchaseDate: assetData.purchaseDate ?? null,
                 warrantyEnd: assetData.warrantyEnd ?? null,
                 notes: assetData.notes ?? null,
-                customFields: (assetData.customFields ?? {}) as Prisma.InputJsonValue,
+                customFields: normalizedCustomFields as Prisma.InputJsonValue,
             },
         });
 
@@ -312,7 +435,15 @@ export async function updateAssetForTenant(
 
         assertAssetNotArchived(existingAsset);
 
-        await getCategoryForTenantOrThrow(tx, assetData.categoryId, tenant.id);
+        const category = await getCategoryForTenantOrThrow(
+            tx,
+            assetData.categoryId,
+            tenant.id
+        );
+        const normalizedCustomFields = validateAndNormalizeCustomFields(
+            assetData.customFields,
+            category.fieldSchema
+        );
 
         await ensureIdentifiersAreUnique(
             tx,
@@ -374,7 +505,7 @@ export async function updateAssetForTenant(
         }
 
         const previousCustomFields = JSON.stringify(existingAsset.customFields ?? {});
-        const nextCustomFields = JSON.stringify(assetData.customFields ?? {});
+        const nextCustomFields = JSON.stringify(normalizedCustomFields);
         if (previousCustomFields !== nextCustomFields) {
             changedFields.push("customFields");
         }
@@ -393,7 +524,7 @@ export async function updateAssetForTenant(
                 purchaseDate: assetData.purchaseDate ?? null,
                 warrantyEnd: assetData.warrantyEnd ?? null,
                 notes: assetData.notes ?? null,
-                customFields: (assetData.customFields ?? {}) as Prisma.InputJsonValue,
+                customFields: normalizedCustomFields as Prisma.InputJsonValue,
             },
         });
 

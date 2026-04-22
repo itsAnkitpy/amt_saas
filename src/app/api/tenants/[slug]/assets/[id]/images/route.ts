@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { checkTenantAccessForApi } from '@/lib/auth';
+import { checkTenantAccessForApi, requireRole } from '@/lib/auth';
 import { logAssetActivity, getUserDisplayName } from '@/lib/activity-log';
 import {
     getStorage,
@@ -90,7 +90,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const { tenant } = authResult;
+        const { tenant, user } = authResult;
+
+        const roleError = requireRole(user, 'MANAGER');
+        if (roleError) {
+            return NextResponse.json(
+                { error: roleError.error },
+                { status: roleError.status }
+            );
+        }
 
         // Verify asset belongs to tenant
         const asset = await db.asset.findFirst({
@@ -198,8 +206,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         await logAssetActivity({
             action: 'IMAGE_ADDED',
             assetId,
-            userId: authResult.user.id,
-            userName: getUserDisplayName(authResult.user),
+            userId: user.id,
+            userName: getUserDisplayName(user),
             tenantId: tenant.id,
             details: { fileName: file.name }
         });

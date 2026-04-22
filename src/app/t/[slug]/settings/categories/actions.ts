@@ -77,6 +77,19 @@ export async function updateCategory(
         throw new Error("Category name is required");
     }
 
+    // Ensure the category belongs to this tenant before mutating it
+    const category = await db.assetCategory.findFirst({
+        where: {
+            id: categoryId,
+            tenantId: tenant.id,
+        },
+        select: { id: true },
+    });
+
+    if (!category) {
+        throw new Error("Category not found");
+    }
+
     // Check if name already exists for another category
     const existing = await db.assetCategory.findFirst({
         where: {
@@ -91,7 +104,7 @@ export async function updateCategory(
     }
 
     await db.assetCategory.update({
-        where: { id: categoryId },
+        where: { id: category.id },
         data: {
             name,
             description,
@@ -110,16 +123,31 @@ export async function updateCategory(
  * Requires: ADMIN role
  */
 export async function deleteCategory(tenantSlug: string, categoryId: string) {
-    const { user } = await requireTenantAccess(tenantSlug);
+    const { user, tenant } = await requireTenantAccess(tenantSlug);
 
     // RBAC: Require ADMIN role for category management
     if (!hasRole(user, 'ADMIN')) {
         throw new Error("You need ADMIN role to manage categories");
     }
 
+    const category = await db.assetCategory.findFirst({
+        where: {
+            id: categoryId,
+            tenantId: tenant.id,
+        },
+        select: { id: true },
+    });
+
+    if (!category) {
+        throw new Error("Category not found");
+    }
+
     // Check if category has assets
     const assetCount = await db.asset.count({
-        where: { categoryId },
+        where: {
+            categoryId: category.id,
+            tenantId: tenant.id,
+        },
     });
 
     if (assetCount > 0) {
@@ -127,7 +155,7 @@ export async function deleteCategory(tenantSlug: string, categoryId: string) {
     }
 
     await db.assetCategory.delete({
-        where: { id: categoryId },
+        where: { id: category.id },
     });
 
     revalidatePath(`/t/${tenantSlug}/settings/categories`);
