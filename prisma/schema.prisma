@@ -109,25 +109,28 @@ model Department {
 
 // Asset Category with custom field schema
 model AssetCategory {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  icon        String?  // Lucide icon name (e.g., "laptop", "monitor")
+  id                              String   @id @default(cuid())
+  name                            String
+  description                     String?
+  icon                            String?  // Lucide icon name (e.g., "laptop", "monitor")
+  defaultMaintenanceIntervalValue Int?
+  defaultMaintenanceIntervalUnit  MaintenanceIntervalUnit?
+  defaultMaintenanceInstructions  String?
 
   // Custom field schema - JSON array defining fields for assets in this category
   // Example: [{"key": "processor", "label": "Processor", "type": "text", "required": true}]
   fieldSchema Json     @default("[]")
 
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive                        Boolean  @default(true)
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   // Tenant relation
-  tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId                        String
+  tenant                          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Assets in this category
-  assets      Asset[]
+  assets                          Asset[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -184,6 +187,10 @@ model Asset {
   
   // Asset images
   images        AssetImage[]
+
+  // Maintenance
+  maintenanceSchedule AssetMaintenanceSchedule?
+  maintenanceJobs     MaintenanceJob[]
   
   // Activity log
   activities    AssetActivity[]
@@ -262,6 +269,61 @@ enum AssetCondition {
   POOR
 }
 
+enum MaintenanceIntervalUnit {
+  DAYS
+  WEEKS
+  MONTHS
+  YEARS
+}
+
+model AssetMaintenanceSchedule {
+  id            String                  @id @default(cuid())
+  assetId       String                  @unique
+  asset         Asset                   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  intervalValue Int
+  intervalUnit  MaintenanceIntervalUnit
+  instructions  String?
+  isActive      Boolean                 @default(true)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  jobs          MaintenanceJob[]
+
+  @@index([isActive])
+  @@map("asset_maintenance_schedules")
+}
+
+enum MaintenanceJobStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model MaintenanceJob {
+  id              String               @id @default(cuid())
+  assetId         String
+  asset           Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  scheduleId      String
+  schedule        AssetMaintenanceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  status          MaintenanceJobStatus @default(OPEN)
+  dueAt           DateTime
+  startedAt       DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  notes           String?
+  cost            Decimal?             @db.Decimal(10, 2)
+  completedById   String?
+  completedByName String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([assetId, status])
+  @@index([scheduleId, status])
+  @@index([status, dueAt])
+  @@map("maintenance_jobs")
+}
+
 // ============================================
 // AUDIT TRAIL
 // ============================================
@@ -303,4 +365,10 @@ enum AssetAction {
   RESTORED
   IMAGE_ADDED
   IMAGE_REMOVED
+  MAINTENANCE_SCHEDULED
+  MAINTENANCE_UPDATED
+  MAINTENANCE_DISABLED
+  MAINTENANCE_STARTED
+  MAINTENANCE_COMPLETED
+  MAINTENANCE_CANCELLED
 }

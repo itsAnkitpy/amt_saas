@@ -21,6 +21,7 @@ import {
     Wrench,
 } from "lucide-react";
 import { hasRole } from "@/lib/auth";
+import { getMaintenanceDueSoonRange } from "@/lib/maintenance";
 
 interface TenantDashboardPageProps {
     params: Promise<{ slug: string }>;
@@ -67,6 +68,8 @@ export default async function TenantDashboardPage({
 
     const now = new Date();
     const thirtyDaysFromNow = addDays(now, 30);
+    const { start: maintenanceDueSoonStart, end: maintenanceDueSoonEnd } =
+        getMaintenanceDueSoonRange(now);
 
     // Get all stats and chart data in parallel for performance
     const [
@@ -75,6 +78,8 @@ export default async function TenantDashboardPage({
         availableCount,
         assignedCount,
         maintenanceCount,
+        maintenanceOverdueCount,
+        maintenanceDueSoonCount,
         poorConditionCount,
         archivedAssetsCount,
         totalValueResult,
@@ -90,6 +95,23 @@ export default async function TenantDashboardPage({
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "AVAILABLE" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "ASSIGNED" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "MAINTENANCE" } }),
+        db.maintenanceJob.count({
+            where: {
+                asset: { tenantId: tenant.id, archivedAt: null },
+                status: "OPEN",
+                dueAt: { lt: maintenanceDueSoonStart },
+            },
+        }),
+        db.maintenanceJob.count({
+            where: {
+                asset: { tenantId: tenant.id, archivedAt: null },
+                status: "OPEN",
+                dueAt: {
+                    gte: maintenanceDueSoonStart,
+                    lte: maintenanceDueSoonEnd,
+                },
+            },
+        }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, condition: "POOR" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: { not: null } } }),
         db.asset.aggregate({
@@ -215,6 +237,26 @@ export default async function TenantDashboardPage({
 
     const actionCenterCards = [
         {
+            title: "Maintenance Overdue",
+            count: maintenanceOverdueCount,
+            description: "These maintenance jobs are already overdue and should be handled first.",
+            emptyMessage: "No maintenance jobs are currently overdue.",
+            href: `/t/${slug}/maintenance?filter=overdue`,
+            actionLabel: "Open overdue queue",
+            icon: Wrench,
+            tone: "red" as const,
+        },
+        {
+            title: "Maintenance Due Soon",
+            count: maintenanceDueSoonCount,
+            description: "These scheduled jobs are due in the next 7 days and should be planned now.",
+            emptyMessage: "No maintenance jobs are due in the next 7 days.",
+            href: `/t/${slug}/maintenance?filter=due-soon`,
+            actionLabel: "Plan upcoming work",
+            icon: Wrench,
+            tone: "blue" as const,
+        },
+        {
             title: "Expired Warranties",
             count: expiredWarrantyData.length,
             description: "These assets already lost warranty coverage and should be reviewed first.",
@@ -233,16 +275,6 @@ export default async function TenantDashboardPage({
             actionLabel: "Review expiring assets",
             icon: AlertTriangle,
             tone: "amber" as const,
-        },
-        {
-            title: "In Maintenance",
-            count: maintenanceCount,
-            description: "These assets are out of circulation and may need follow-up to return to service.",
-            emptyMessage: "No assets are currently marked as under maintenance.",
-            href: buildAssetListHref(slug, { status: "MAINTENANCE" }),
-            actionLabel: "Open maintenance queue",
-            icon: Wrench,
-            tone: "blue" as const,
         },
         {
             title: "Poor Condition",
@@ -267,6 +299,12 @@ export default async function TenantDashboardPage({
     ];
 
     const quickActions = [
+        {
+            title: "Maintenance Queue",
+            description: "Work through overdue, due soon, and in-progress maintenance jobs.",
+            href: `/t/${slug}/maintenance`,
+            icon: Wrench,
+        },
         {
             title: "View Inventory",
             description: "Open the full asset list and jump into filtering, exporting, and bulk operations.",
@@ -379,7 +417,7 @@ export default async function TenantDashboardPage({
                     </Link>
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                     {actionCenterCards.map((card) => (
                         <ActionCenterCard
                             key={card.title}

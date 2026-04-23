@@ -8,9 +8,15 @@ import {
 import { badRequest, notFound } from "@/lib/api-error";
 import { Prisma } from "@/generated/prisma";
 import {
+    createMaintenanceScheduleWithFirstJob,
+    deactivateMaintenanceForAssets,
+} from "@/lib/maintenance";
+import {
     CreateAssetSchema,
+    MaintenanceScheduleInputSchema,
     type CreateAsset,
     type FieldDefinition as CategoryFieldDefinition,
+    type MaintenanceScheduleInput,
     validate,
 } from "@/lib/validations";
 
@@ -45,6 +51,10 @@ function getOptionalTextValue(value: FormDataEntryValue | null): string | null {
     return trimmed.length > 0 ? trimmed : null;
 }
 
+function isTruthyFormValue(value: FormDataEntryValue | null) {
+    return typeof value === "string" && ["true", "on", "1"].includes(value);
+}
+
 function parseAssetFormData(formData: FormData): CreateAsset {
     let customFields: Record<string, unknown> | null = {};
 
@@ -73,6 +83,31 @@ function parseAssetFormData(formData: FormData): CreateAsset {
     };
 
     const result = validate(CreateAssetSchema, rawData);
+    if (!result.success) {
+        throw new Error(result.error);
+    }
+
+    return result.data;
+}
+
+function parseMaintenanceFormData(
+    formData: FormData
+): MaintenanceScheduleInput | null {
+    if (!isTruthyFormValue(formData.get("maintenanceEnabled"))) {
+        return null;
+    }
+
+    const rawData = {
+        intervalValue:
+            getOptionalTextValue(formData.get("maintenanceIntervalValue")) ?? "",
+        intervalUnit:
+            getOptionalTextValue(formData.get("maintenanceIntervalUnit")) ?? "",
+        firstDueAt:
+            getOptionalTextValue(formData.get("maintenanceFirstDueAt")) ?? "",
+        instructions: getOptionalTextValue(formData.get("maintenanceInstructions")),
+    };
+
+    const result = validate(MaintenanceScheduleInputSchema, rawData);
     if (!result.success) {
         throw new Error(result.error);
     }
@@ -345,6 +380,7 @@ export async function createAssetForTenant(
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
     const assetData = parseAssetFormData(formData);
+    const maintenanceData = parseMaintenanceFormData(formData);
 
     if (assetData.status === "ASSIGNED") {
         throw new Error("Use the assign action after creating an asset");
@@ -397,6 +433,22 @@ export async function createAssetForTenant(
             },
             tx
         );
+
+        if (maintenanceData) {
+            await createMaintenanceScheduleWithFirstJob(
+                {
+                    assetId: asset.id,
+                    intervalValue: maintenanceData.intervalValue,
+                    intervalUnit: maintenanceData.intervalUnit,
+                    firstDueAt: maintenanceData.firstDueAt,
+                    instructions: maintenanceData.instructions ?? null,
+                    userId: user.id,
+                    userName: getUserDisplayName(user),
+                    tenantId: tenant.id,
+                },
+                tx
+            );
+        }
 
         return asset;
     });
@@ -591,6 +643,18 @@ export async function deleteAssetForTenant(
                 archivedAt,
             },
         });
+
+        await deactivateMaintenanceForAssets(
+            {
+                assetIds: [asset.id],
+                reason: "asset_archived",
+                userId: user.id,
+                userName: getUserDisplayName(user),
+                tenantId: tenant.id,
+                disabledAt: archivedAt,
+            },
+            tx
+        );
 
         await logAssetActivity(
             {
@@ -1137,6 +1201,18 @@ export async function bulkDeleteAssetsForTenant(
                 archivedAt,
             },
         });
+
+        await deactivateMaintenanceForAssets(
+            {
+                assetIds: uniqueAssetIds,
+                reason: "asset_archived",
+                userId: user.id,
+                userName: getUserDisplayName(user),
+                tenantId: tenant.id,
+                disabledAt: archivedAt,
+            },
+            tx
+        );
 
         await logBulkAssetActivity(
             "DELETED",

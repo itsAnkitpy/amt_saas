@@ -34,6 +34,9 @@ export default async function NewAssetPage({
             id: true,
             name: true,
             fieldSchema: true,
+            defaultMaintenanceIntervalValue: true,
+            defaultMaintenanceIntervalUnit: true,
+            defaultMaintenanceInstructions: true,
         },
     });
 
@@ -41,6 +44,11 @@ export default async function NewAssetPage({
         id: category.id,
         name: category.name,
         fieldSchema: category.fieldSchema as unknown as FieldDefinition[],
+        defaultMaintenanceIntervalValue:
+            category.defaultMaintenanceIntervalValue,
+        defaultMaintenanceIntervalUnit: category.defaultMaintenanceIntervalUnit,
+        defaultMaintenanceInstructions:
+            category.defaultMaintenanceInstructions,
     }));
 
     return (

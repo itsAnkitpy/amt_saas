@@ -20,6 +20,7 @@ import {
     UnassignAssetButton,
 } from "./asset-action-buttons";
 import { ActivityTimeline } from "@/components/activity-timeline";
+import { AssetMaintenanceCard } from "./asset-maintenance-card";
 
 interface AssetDetailPageProps {
     params: Promise<{ slug: string; id: string }>;
@@ -52,6 +53,11 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
         include: {
             category: true,
             assignedTo: true,
+            maintenanceSchedule: true,
+            maintenanceJobs: {
+                orderBy: { createdAt: "desc" },
+                take: 8,
+            },
             assignments: {
                 include: {
                     user: true,
@@ -222,6 +228,38 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                             </div>
                         </div>
                     </div>
+
+                    <AssetMaintenanceCard
+                        tenantSlug={slug}
+                        assetId={asset.id}
+                        canManageMaintenance={canManageAssets}
+                        isArchived={isArchived}
+                        schedule={
+                            asset.maintenanceSchedule
+                                ? {
+                                    id: asset.maintenanceSchedule.id,
+                                    isActive: asset.maintenanceSchedule.isActive,
+                                    intervalValue:
+                                        asset.maintenanceSchedule.intervalValue,
+                                    intervalUnit:
+                                        asset.maintenanceSchedule.intervalUnit,
+                                    instructions:
+                                        asset.maintenanceSchedule.instructions,
+                                }
+                                : null
+                        }
+                        jobs={asset.maintenanceJobs.map((job) => ({
+                            id: job.id,
+                            status: job.status,
+                            dueAt: job.dueAt.toISOString(),
+                            startedAt: job.startedAt?.toISOString() ?? null,
+                            completedAt: job.completedAt?.toISOString() ?? null,
+                            cancelledAt: job.cancelledAt?.toISOString() ?? null,
+                            notes: job.notes,
+                            cost: job.cost?.toString() ?? null,
+                            completedByName: job.completedByName,
+                        }))}
+                    />
 
                     {/* Notes */}
                     {asset.notes && (

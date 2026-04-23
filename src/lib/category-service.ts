@@ -67,7 +67,15 @@ export async function createCategoryForTenant(
         throw new Error(result.error);
     }
 
-    const { name, description, icon, fieldSchema } = result.data;
+    const {
+        name,
+        description,
+        icon,
+        fieldSchema,
+        defaultMaintenanceIntervalValue,
+        defaultMaintenanceIntervalUnit,
+        defaultMaintenanceInstructions,
+    } = result.data;
 
     await ensureCategoryNameAvailable(tenant.id, name);
 
@@ -78,6 +86,12 @@ export async function createCategoryForTenant(
             icon,
             fieldSchema: fieldSchema as unknown as CategoryFieldSchema,
             tenantId: tenant.id,
+            defaultMaintenanceIntervalValue:
+                defaultMaintenanceIntervalValue ?? null,
+            defaultMaintenanceIntervalUnit:
+                defaultMaintenanceIntervalUnit ?? null,
+            defaultMaintenanceInstructions:
+                defaultMaintenanceInstructions ?? null,
         },
     });
 }
@@ -94,7 +108,16 @@ export async function updateCategoryForTenant(
         throw new Error(result.error);
     }
 
-    const { name, description, icon, fieldSchema, isActive } = result.data;
+    const {
+        name,
+        description,
+        icon,
+        fieldSchema,
+        isActive,
+        defaultMaintenanceIntervalValue,
+        defaultMaintenanceIntervalUnit,
+        defaultMaintenanceInstructions,
+    } = result.data;
 
     if (!name) {
         throw new Error("Category name is required");
@@ -112,6 +135,12 @@ export async function updateCategoryForTenant(
             icon,
             fieldSchema: fieldSchema as unknown as CategoryFieldSchema,
             isActive,
+            defaultMaintenanceIntervalValue:
+                defaultMaintenanceIntervalValue ?? null,
+            defaultMaintenanceIntervalUnit:
+                defaultMaintenanceIntervalUnit ?? null,
+            defaultMaintenanceInstructions:
+                defaultMaintenanceInstructions ?? null,
         },
     });
 }

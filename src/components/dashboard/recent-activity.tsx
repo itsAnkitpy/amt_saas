@@ -10,6 +10,10 @@ import {
     ImageMinus,
     ChevronRight,
     type LucideIcon,
+    CalendarClock,
+    PlayCircle,
+    CircleCheckBig,
+    Ban,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
@@ -25,6 +29,12 @@ const ACTION_CONFIG: Record<string, { icon: LucideIcon; color: string; label: st
     STATUS_CHANGED: { icon: RefreshCw, color: 'text-yellow-600', label: 'status changed' },
     IMAGE_ADDED: { icon: ImagePlus, color: 'text-blue-500', label: 'image added' },
     IMAGE_REMOVED: { icon: ImageMinus, color: 'text-zinc-500', label: 'image removed' },
+    MAINTENANCE_SCHEDULED: { icon: CalendarClock, color: 'text-violet-600', label: 'scheduled maintenance for' },
+    MAINTENANCE_UPDATED: { icon: Pencil, color: 'text-blue-600', label: 'updated maintenance for' },
+    MAINTENANCE_DISABLED: { icon: Ban, color: 'text-zinc-500', label: 'disabled maintenance for' },
+    MAINTENANCE_STARTED: { icon: PlayCircle, color: 'text-amber-600', label: 'started maintenance on' },
+    MAINTENANCE_COMPLETED: { icon: CircleCheckBig, color: 'text-green-600', label: 'completed maintenance on' },
+    MAINTENANCE_CANCELLED: { icon: Ban, color: 'text-red-600', label: 'cancelled maintenance for' },
 };
 
 interface Activity {
@@ -63,6 +73,22 @@ function formatDetails(action: string, details: Record<string, unknown> | null):
             return details.fileName as string || '';
         case 'CREATED':
             return details.category ? `in ${details.category}` : '';
+        case 'MAINTENANCE_SCHEDULED':
+        case 'MAINTENANCE_UPDATED':
+            return details.intervalLabel
+                ? `(${details.intervalLabel})`
+                : '';
+        case 'MAINTENANCE_DISABLED':
+        case 'MAINTENANCE_CANCELLED':
+            return details.reason ? `(${details.reason})` : '';
+        case 'MAINTENANCE_STARTED':
+            return details.dueAt
+                ? `due ${new Date(details.dueAt as string).toLocaleDateString()}`
+                : '';
+        case 'MAINTENANCE_COMPLETED':
+            return details.nextDueAt
+                ? `next due ${new Date(details.nextDueAt as string).toLocaleDateString()}`
+                : '';
         default:
             return '';
     }

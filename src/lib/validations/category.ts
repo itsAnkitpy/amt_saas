@@ -13,6 +13,30 @@ const FieldTypeSchema = z.enum([
     'boolean',
 ]);
 
+const MaintenanceIntervalUnitSchema = z.enum([
+    'DAYS',
+    'WEEKS',
+    'MONTHS',
+    'YEARS',
+]);
+
+const OptionalPositiveIntSchema = z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) {
+        return undefined;
+    }
+
+    return value;
+}, z.coerce.number().int().min(1).optional());
+
+const OptionalStringSchema = z.preprocess((value) => {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+}, z.string().max(2000).nullable().optional());
+
 /**
  * Schema for a single custom field definition
  */
@@ -33,7 +57,7 @@ const FieldDefinitionSchema = z.object({
 /**
  * Schema for creating a new asset category
  */
-export const CreateCategorySchema = z.object({
+const CategorySchemaBase = z.object({
     name: z
         .string()
         .min(1, 'Category name is required')
@@ -41,14 +65,58 @@ export const CreateCategorySchema = z.object({
     description: z.string().max(500).optional().nullable(),
     icon: z.string().max(50).optional().nullable(),
     fieldSchema: z.array(FieldDefinitionSchema).default([]),
+    defaultMaintenanceIntervalValue: OptionalPositiveIntSchema,
+    defaultMaintenanceIntervalUnit: z
+        .preprocess((value) => {
+            if (value === '' || value === null || value === undefined) {
+                return undefined;
+            }
+
+            return value;
+        }, MaintenanceIntervalUnitSchema.optional()),
+    defaultMaintenanceInstructions: OptionalStringSchema,
 });
+
+function refineMaintenanceDefaults(
+    data: {
+        defaultMaintenanceIntervalValue?: number;
+        defaultMaintenanceIntervalUnit?: z.infer<typeof MaintenanceIntervalUnitSchema>;
+    },
+    ctx: z.RefinementCtx
+) {
+        const hasIntervalValue =
+            typeof data.defaultMaintenanceIntervalValue === 'number';
+        const hasIntervalUnit = Boolean(data.defaultMaintenanceIntervalUnit);
+
+        if (hasIntervalValue && !hasIntervalUnit) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['defaultMaintenanceIntervalUnit'],
+                message: 'Maintenance interval unit is required when a default interval is set',
+            });
+        }
+
+        if (!hasIntervalValue && hasIntervalUnit) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['defaultMaintenanceIntervalValue'],
+                message: 'Maintenance interval value is required when a default unit is set',
+            });
+        }
+}
+
+export const CreateCategorySchema = CategorySchemaBase.superRefine(
+    refineMaintenanceDefaults
+);
 
 /**
  * Schema for updating an existing category
  */
-export const UpdateCategorySchema = CreateCategorySchema.partial().extend({
-    isActive: z.boolean().optional(),
-});
+export const UpdateCategorySchema = CategorySchemaBase.partial()
+    .extend({
+        isActive: z.boolean().optional(),
+    })
+    .superRefine(refineMaintenanceDefaults);
 
 // ============================================
 // Type Exports

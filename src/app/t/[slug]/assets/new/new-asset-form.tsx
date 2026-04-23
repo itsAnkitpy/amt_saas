@@ -16,10 +16,15 @@ import {
 } from "@/components/ui/select";
 import { createAsset } from "../actions";
 
+type MaintenanceIntervalUnit = "DAYS" | "WEEKS" | "MONTHS" | "YEARS";
+
 interface CategoryOption {
     id: string;
     name: string;
     fieldSchema: FieldDefinition[];
+    defaultMaintenanceIntervalValue: number | null;
+    defaultMaintenanceIntervalUnit: MaintenanceIntervalUnit | null;
+    defaultMaintenanceInstructions: string | null;
 }
 
 interface NewAssetFormProps {
@@ -39,11 +44,40 @@ export function NewAssetForm({
     const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
+    const [maintenanceIntervalValue, setMaintenanceIntervalValue] = useState("");
+    const [maintenanceIntervalUnit, setMaintenanceIntervalUnit] = useState<
+        MaintenanceIntervalUnit | ""
+    >("");
+    const [maintenanceFirstDueAt, setMaintenanceFirstDueAt] = useState("");
+    const [maintenanceInstructions, setMaintenanceInstructions] = useState("");
+
+    const applyCategoryDefaults = (category: CategoryOption | null) => {
+        const hasScheduleDefaults = Boolean(
+            category?.defaultMaintenanceIntervalValue &&
+                category?.defaultMaintenanceIntervalUnit
+        );
+
+        setMaintenanceEnabled(hasScheduleDefaults);
+        setMaintenanceIntervalValue(
+            category?.defaultMaintenanceIntervalValue
+                ? String(category.defaultMaintenanceIntervalValue)
+                : ""
+        );
+        setMaintenanceIntervalUnit(
+            category?.defaultMaintenanceIntervalUnit ?? ""
+        );
+        setMaintenanceFirstDueAt("");
+        setMaintenanceInstructions(
+            category?.defaultMaintenanceInstructions ?? ""
+        );
+    };
 
     const handleCategoryChange = (categoryId: string) => {
         const category = categories.find((item) => item.id === categoryId) ?? null;
         setSelectedCategory(category);
         setCustomFields({});
+        applyCategoryDefaults(category);
     };
 
     const handleSubmit = async (formData: FormData) => {
@@ -198,6 +232,125 @@ export function NewAssetForm({
                         />
                     </div>
                 )}
+
+                <div className="rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold">Maintenance</h3>
+                            <p className="mt-1 text-sm text-zinc-500">
+                                Track recurring maintenance for this asset with one
+                                active schedule.
+                            </p>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm font-medium">
+                            <input
+                                type="checkbox"
+                                name="maintenanceEnabled"
+                                value="true"
+                                checked={maintenanceEnabled}
+                                onChange={(event) =>
+                                    setMaintenanceEnabled(event.target.checked)
+                                }
+                                className="h-4 w-4 rounded border-zinc-300"
+                            />
+                            Track maintenance
+                        </label>
+                    </div>
+
+                    {selectedCategory?.defaultMaintenanceIntervalValue &&
+                        selectedCategory.defaultMaintenanceIntervalUnit && (
+                            <p className="mt-3 text-xs text-zinc-500">
+                                {selectedCategory.name} defaults are prefilled and can
+                                be changed before saving.
+                            </p>
+                        )}
+
+                    {maintenanceEnabled && (
+                        <div className="mt-6 grid gap-4 md:grid-cols-2">
+                            <div className="space-y-1">
+                                <Label htmlFor="maintenanceIntervalValue">
+                                    Maintenance Interval *
+                                </Label>
+                                <Input
+                                    id="maintenanceIntervalValue"
+                                    name="maintenanceIntervalValue"
+                                    type="number"
+                                    min="1"
+                                    required={maintenanceEnabled}
+                                    value={maintenanceIntervalValue}
+                                    onChange={(event) =>
+                                        setMaintenanceIntervalValue(
+                                            event.target.value
+                                        )
+                                    }
+                                    placeholder="e.g., 6"
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label htmlFor="maintenanceIntervalUnit">
+                                    Interval Unit *
+                                </Label>
+                                <select
+                                    id="maintenanceIntervalUnit"
+                                    name="maintenanceIntervalUnit"
+                                    required={maintenanceEnabled}
+                                    value={maintenanceIntervalUnit}
+                                    onChange={(event) =>
+                                        setMaintenanceIntervalUnit(
+                                            event.target
+                                                .value as MaintenanceIntervalUnit | ""
+                                        )
+                                    }
+                                    className="flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs"
+                                >
+                                    <option value="">Select interval unit</option>
+                                    <option value="DAYS">Days</option>
+                                    <option value="WEEKS">Weeks</option>
+                                    <option value="MONTHS">Months</option>
+                                    <option value="YEARS">Years</option>
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label htmlFor="maintenanceFirstDueAt">
+                                    First Due Date *
+                                </Label>
+                                <Input
+                                    id="maintenanceFirstDueAt"
+                                    name="maintenanceFirstDueAt"
+                                    type="date"
+                                    required={maintenanceEnabled}
+                                    value={maintenanceFirstDueAt}
+                                    onChange={(event) =>
+                                        setMaintenanceFirstDueAt(
+                                            event.target.value
+                                        )
+                                    }
+                                />
+                            </div>
+
+                            <div className="space-y-1 md:col-span-2">
+                                <Label htmlFor="maintenanceInstructions">
+                                    Maintenance Instructions
+                                </Label>
+                                <textarea
+                                    id="maintenanceInstructions"
+                                    name="maintenanceInstructions"
+                                    rows={3}
+                                    value={maintenanceInstructions}
+                                    onChange={(event) =>
+                                        setMaintenanceInstructions(
+                                            event.target.value
+                                        )
+                                    }
+                                    className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                    placeholder="Optional instructions for recurring maintenance work"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 <div className="rounded-lg border bg-white p-6 dark:bg-zinc-950">
                     <h3 className="mb-4 font-semibold">Purchase Information</h3>

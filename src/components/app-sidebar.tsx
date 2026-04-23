@@ -11,6 +11,7 @@ import {
     SettingsIcon,
     ChevronLeftIcon,
     ActivityIcon,
+    WrenchIcon,
 } from 'lucide-react';
 import {
     Sidebar,
@@ -59,6 +60,11 @@ export function AppSidebar({
             title: 'Scan',
             href: `/t/${slug}/scan`,
             icon: ScanIcon,
+        },
+        {
+            title: 'Maintenance',
+            href: `/t/${slug}/maintenance`,
+            icon: WrenchIcon,
         },
     ];
 

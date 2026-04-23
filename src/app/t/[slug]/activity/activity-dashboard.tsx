@@ -16,6 +16,10 @@ import {
     Loader2Icon,
     AlertCircleIcon,
     FilterIcon,
+    CalendarClockIcon,
+    PlayCircleIcon,
+    CircleCheckBigIcon,
+    BanIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +56,12 @@ const actionConfig: Record<string, { icon: typeof PlusCircleIcon; label: string;
     RESTORED: { icon: RotateCcwIcon, label: 'Restored', color: 'text-green-600' },
     IMAGE_ADDED: { icon: ImagePlusIcon, label: 'Image added', color: 'text-blue-500' },
     IMAGE_REMOVED: { icon: ImageMinusIcon, label: 'Image removed', color: 'text-zinc-500' },
+    MAINTENANCE_SCHEDULED: { icon: CalendarClockIcon, label: 'Maintenance scheduled', color: 'text-violet-600' },
+    MAINTENANCE_UPDATED: { icon: PencilIcon, label: 'Maintenance updated', color: 'text-blue-600' },
+    MAINTENANCE_DISABLED: { icon: BanIcon, label: 'Maintenance disabled', color: 'text-zinc-500' },
+    MAINTENANCE_STARTED: { icon: PlayCircleIcon, label: 'Maintenance started', color: 'text-amber-600' },
+    MAINTENANCE_COMPLETED: { icon: CircleCheckBigIcon, label: 'Maintenance completed', color: 'text-green-600' },
+    MAINTENANCE_CANCELLED: { icon: BanIcon, label: 'Maintenance cancelled', color: 'text-red-600' },
 };
 
 const actionTypes = [
@@ -65,6 +75,12 @@ const actionTypes = [
     { value: 'RESTORED', label: 'Restored' },
     { value: 'IMAGE_ADDED', label: 'Image Added' },
     { value: 'IMAGE_REMOVED', label: 'Image Removed' },
+    { value: 'MAINTENANCE_SCHEDULED', label: 'Maintenance Scheduled' },
+    { value: 'MAINTENANCE_UPDATED', label: 'Maintenance Updated' },
+    { value: 'MAINTENANCE_DISABLED', label: 'Maintenance Disabled' },
+    { value: 'MAINTENANCE_STARTED', label: 'Maintenance Started' },
+    { value: 'MAINTENANCE_COMPLETED', label: 'Maintenance Completed' },
+    { value: 'MAINTENANCE_CANCELLED', label: 'Maintenance Cancelled' },
 ];
 
 export function ActivityDashboard({ tenantSlug }: ActivityDashboardProps) {
@@ -125,6 +141,22 @@ export function ActivityDashboard({ tenantSlug }: ActivityDashboardProps) {
                 return details.fileName as string;
             case 'CREATED':
                 return details.category ? `in ${details.category}` : '';
+            case 'MAINTENANCE_SCHEDULED':
+            case 'MAINTENANCE_UPDATED':
+                return details.intervalLabel
+                    ? `(${details.intervalLabel})`
+                    : '';
+            case 'MAINTENANCE_DISABLED':
+            case 'MAINTENANCE_CANCELLED':
+                return details.reason ? `(${details.reason})` : '';
+            case 'MAINTENANCE_STARTED':
+                return details.dueAt
+                    ? `(due ${new Date(details.dueAt as string).toLocaleDateString()})`
+                    : '';
+            case 'MAINTENANCE_COMPLETED':
+                return details.nextDueAt
+                    ? `(next due ${new Date(details.nextDueAt as string).toLocaleDateString()})`
+                    : '';
             default:
                 return '';
         }

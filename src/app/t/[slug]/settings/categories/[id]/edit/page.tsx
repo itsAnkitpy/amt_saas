@@ -24,6 +24,14 @@ export default function EditCategoryPage({ params }: EditCategoryPageProps) {
         description: string | null;
         icon: string | null;
         isActive: boolean;
+        defaultMaintenanceIntervalValue: number | null;
+        defaultMaintenanceIntervalUnit:
+            | "DAYS"
+            | "WEEKS"
+            | "MONTHS"
+            | "YEARS"
+            | null;
+        defaultMaintenanceInstructions: string | null;
         fieldSchema: FieldDefinition[];
         _count: { assets: number };
     } | null>(null);
@@ -152,6 +160,63 @@ export default function EditCategoryPage({ params }: EditCategoryPageProps) {
                                 className="h-4 w-4 rounded border-zinc-300"
                             />
                             <Label htmlFor="isActive">Active</Label>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                    <h3 className="mb-4 font-semibold">Default Maintenance</h3>
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-1">
+                            <Label htmlFor="defaultMaintenanceIntervalValue">
+                                Default Interval
+                            </Label>
+                            <Input
+                                id="defaultMaintenanceIntervalValue"
+                                name="defaultMaintenanceIntervalValue"
+                                type="number"
+                                min="1"
+                                defaultValue={
+                                    category.defaultMaintenanceIntervalValue ?? ""
+                                }
+                                placeholder="e.g., 6"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label htmlFor="defaultMaintenanceIntervalUnit">
+                                Default Unit
+                            </Label>
+                            <select
+                                id="defaultMaintenanceIntervalUnit"
+                                name="defaultMaintenanceIntervalUnit"
+                                className="flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs"
+                                defaultValue={
+                                    category.defaultMaintenanceIntervalUnit ?? ""
+                                }
+                            >
+                                <option value="">No default unit</option>
+                                <option value="DAYS">Days</option>
+                                <option value="WEEKS">Weeks</option>
+                                <option value="MONTHS">Months</option>
+                                <option value="YEARS">Years</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1 md:col-span-2">
+                            <Label htmlFor="defaultMaintenanceInstructions">
+                                Default Instructions
+                            </Label>
+                            <textarea
+                                id="defaultMaintenanceInstructions"
+                                name="defaultMaintenanceInstructions"
+                                rows={3}
+                                defaultValue={
+                                    category.defaultMaintenanceInstructions || ""
+                                }
+                                className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                placeholder="Optional notes to prefill when a maintenance schedule is created for this category"
+                            />
                         </div>
                     </div>
                 </div>

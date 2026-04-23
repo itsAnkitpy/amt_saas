@@ -65,6 +65,20 @@ export {
     type UpdateCategory,
 } from './category';
 
+// Maintenance schemas
+export {
+    MaintenanceIntervalUnitSchema,
+    MaintenanceJobStatusSchema,
+    MaintenanceScheduleInputSchema,
+    StartMaintenanceJobSchema,
+    CompleteMaintenanceJobSchema,
+    type MaintenanceIntervalUnit,
+    type MaintenanceJobStatus,
+    type MaintenanceScheduleInput,
+    type StartMaintenanceJob,
+    type CompleteMaintenanceJob,
+} from './maintenance';
+
 // Helper functions
 export {
     validate,
