@@ -41,6 +41,8 @@ export function AppSidebar({
     isSuperAdmin,
 }: AppSidebarProps) {
     const pathname = usePathname();
+    const navItemClassName =
+        "h-10 rounded-lg px-3 text-[15px] font-medium [&>svg]:size-[18px]";
 
     const navItems = [
         {
@@ -108,11 +110,12 @@ export function AppSidebar({
                                 <SidebarMenuItem key={item.href}>
                                     <SidebarMenuButton
                                         asChild
+                                        className={navItemClassName}
                                         isActive={pathname === item.href || pathname.startsWith(item.href + '/')}
                                         tooltip={item.title}
                                     >
                                         <Link href={item.href}>
-                                            <item.icon className="size-4" />
+                                            <item.icon />
                                             <span>{item.title}</span>
                                         </Link>
                                     </SidebarMenuButton>
@@ -131,11 +134,12 @@ export function AppSidebar({
                                     <SidebarMenuItem key={item.href}>
                                         <SidebarMenuButton
                                             asChild
+                                            className={navItemClassName}
                                             isActive={pathname === item.href}
                                             tooltip={item.title}
                                         >
                                             <Link href={item.href}>
-                                                <item.icon className="size-4" />
+                                                <item.icon />
                                                 <span>{item.title}</span>
                                             </Link>
                                         </SidebarMenuButton>
@@ -152,18 +156,26 @@ export function AppSidebar({
                 <SidebarMenu>
                     {isSuperAdmin && (
                         <SidebarMenuItem>
-                            <SidebarMenuButton asChild tooltip="Admin Panel">
+                            <SidebarMenuButton
+                                asChild
+                                className={navItemClassName}
+                                tooltip="Admin Panel"
+                            >
                                 <Link href="/admin" className="text-violet-600">
-                                    <ChevronLeftIcon className="size-4" />
+                                    <ChevronLeftIcon />
                                     <span>Admin Panel</span>
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
                     )}
                     <SidebarMenuItem>
-                        <SidebarMenuButton asChild tooltip="My Account">
+                        <SidebarMenuButton
+                            asChild
+                            className={navItemClassName}
+                            tooltip="My Account"
+                        >
                             <Link href="/dashboard">
-                                <ChevronLeftIcon className="size-4" />
+                                <ChevronLeftIcon />
                                 <span>My Account</span>
                             </Link>
                         </SidebarMenuButton>

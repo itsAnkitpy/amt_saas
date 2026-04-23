@@ -12,13 +12,16 @@ import {
     PaginationPrevious
 } from "@/components/ui/pagination";
 import { PlusIcon, SearchIcon } from "lucide-react";
+import { addDays } from "date-fns";
 
 interface AssetsPageProps {
     params: Promise<{ slug: string }>;
     searchParams: Promise<{
         search?: string;
         status?: string;
+        condition?: string;
         category?: string;
+        warranty?: string;
         archived?: string;
         page?: string;
         pageSize?: string;
@@ -36,7 +39,9 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     const {
         search,
         status,
+        condition,
         category,
+        warranty,
         archived,
         page,
         pageSize: pageSizeParam,
@@ -53,6 +58,11 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
 
     const currentPage = Math.max(1, parseInt(page || "1", 10));
     const skip = (currentPage - 1) * pageSize;
+    const now = new Date();
+    const thirtyDaysFromNow = addDays(now, 30);
+    const hasFilters = Boolean(
+        search || status || condition || category || warranty
+    );
 
     // Build where clause
     const where: Record<string, unknown> = {
@@ -70,8 +80,20 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     if (status) {
         where.status = status;
     }
+    if (condition) {
+        where.condition = condition;
+    }
     if (category) {
         where.categoryId = category;
+    }
+    if (warranty === "expired") {
+        where.warrantyEnd = { lt: now };
+    }
+    if (warranty === "expiring") {
+        where.warrantyEnd = {
+            gte: now,
+            lte: thirtyDaysFromNow,
+        };
     }
 
     // Count total assets for pagination
@@ -122,10 +144,7 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
     // Stats
     const stats = await db.asset.groupBy({
         by: ["status"],
-        where: {
-            tenantId: tenant.id,
-            archivedAt: showArchived ? { not: null } : null,
-        },
+        where,
         _count: true,
     });
 
@@ -138,7 +157,9 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
         const params = new URLSearchParams();
         if (search) params.set("search", search);
         if (status) params.set("status", status);
+        if (condition) params.set("condition", condition);
         if (category) params.set("category", category);
+        if (warranty) params.set("warranty", warranty);
         if (showArchived) params.set("archived", "true");
         params.set("page", pageNum.toString());
         params.set("pageSize", (newPageSize || pageSize).toString());
@@ -167,8 +188,12 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                     </h2>
                     <p className="text-muted-foreground">
                         {showArchived
-                            ? `${allAssetsCount} archived asset${allAssetsCount === 1 ? "" : "s"}`
-                            : `${allAssetsCount} total • ${availableCount} available • ${assignedCount} assigned`}
+                            ? hasFilters
+                                ? `${totalAssets} matching archived asset${totalAssets === 1 ? "" : "s"}`
+                                : `${allAssetsCount} archived asset${allAssetsCount === 1 ? "" : "s"}`
+                            : hasFilters
+                                ? `${totalAssets} matching asset${totalAssets === 1 ? "" : "s"}`
+                                : `${allAssetsCount} total • ${availableCount} available • ${assignedCount} assigned`}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -231,6 +256,26 @@ export default async function AssetsPage({ params, searchParams }: AssetsPagePro
                             {cat.name}
                         </option>
                     ))}
+                </select>
+                <select
+                    name="condition"
+                    defaultValue={condition}
+                    className="rounded-lg border bg-background px-3 py-2 text-sm"
+                >
+                    <option value="">All Condition</option>
+                    <option value="EXCELLENT">Excellent</option>
+                    <option value="GOOD">Good</option>
+                    <option value="FAIR">Fair</option>
+                    <option value="POOR">Poor</option>
+                </select>
+                <select
+                    name="warranty"
+                    defaultValue={warranty}
+                    className="rounded-lg border bg-background px-3 py-2 text-sm"
+                >
+                    <option value="">All Warranty</option>
+                    <option value="expired">Expired</option>
+                    <option value="expiring">Expiring in 30 days</option>
                 </select>
                 <Button type="submit" variant="secondary">
                     Filter

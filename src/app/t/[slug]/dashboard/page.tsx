@@ -6,8 +6,21 @@ import { CategoryChart } from "@/components/dashboard/category-chart";
 import { ConditionChart } from "@/components/dashboard/condition-chart";
 import { WarrantyAlert } from "@/components/dashboard/warranty-alert";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { ActionCenterCard } from "@/components/dashboard/action-center-card";
+import { QuickActionTile } from "@/components/dashboard/quick-action-tile";
 import { addDays } from "date-fns";
 import Link from "next/link";
+import {
+    AlertOctagon,
+    AlertTriangle,
+    ArchiveIcon,
+    FolderKanban,
+    PackagePlus,
+    ScanLine,
+    Users,
+    Wrench,
+} from "lucide-react";
+import { hasRole } from "@/lib/auth";
 
 interface TenantDashboardPageProps {
     params: Promise<{ slug: string }>;
@@ -24,6 +37,22 @@ function formatCurrency(value: number): string {
         return `$${(value / 1000).toFixed(0)}K`;
     }
     return `$${value.toFixed(0)}`;
+}
+
+function buildAssetListHref(
+    slug: string,
+    filters: Record<string, string | undefined>
+) {
+    const params = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(filters)) {
+        if (value) {
+            params.set(key, value);
+        }
+    }
+
+    const query = params.toString();
+    return query ? `/t/${slug}/assets?${query}` : `/t/${slug}/assets`;
 }
 
 /**
@@ -46,6 +75,8 @@ export default async function TenantDashboardPage({
         availableCount,
         assignedCount,
         maintenanceCount,
+        poorConditionCount,
+        archivedAssetsCount,
         totalValueResult,
         statusDistribution,
         categoryBreakdown,
@@ -59,6 +90,8 @@ export default async function TenantDashboardPage({
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "AVAILABLE" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "ASSIGNED" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "MAINTENANCE" } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, condition: "POOR" } }),
+        db.asset.count({ where: { tenantId: tenant.id, archivedAt: { not: null } } }),
         db.asset.aggregate({
             where: { tenantId: tenant.id, archivedAt: null },
             _sum: { purchasePrice: true },
@@ -105,7 +138,6 @@ export default async function TenantDashboardPage({
                 archivedAt: null,
                 warrantyEnd: {
                     lt: now,
-                    gte: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()), // Last 1 year only
                 },
             },
             select: {
@@ -178,6 +210,109 @@ export default async function TenantDashboardPage({
         asset: activity.asset,
     }));
 
+    const isManager = hasRole(user, "MANAGER");
+    const isAdmin = hasRole(user, "ADMIN");
+
+    const actionCenterCards = [
+        {
+            title: "Expired Warranties",
+            count: expiredWarrantyData.length,
+            description: "These assets already lost warranty coverage and should be reviewed first.",
+            emptyMessage: "No active assets currently have an expired warranty.",
+            href: buildAssetListHref(slug, { warranty: "expired" }),
+            actionLabel: "Review expired assets",
+            icon: AlertOctagon,
+            tone: "red" as const,
+        },
+        {
+            title: "Expiring Soon",
+            count: expiringWarrantyData.length,
+            description: "These warranties expire in the next 30 days and may need renewal or replacement planning.",
+            emptyMessage: "No warranties are expiring in the next 30 days.",
+            href: buildAssetListHref(slug, { warranty: "expiring" }),
+            actionLabel: "Review expiring assets",
+            icon: AlertTriangle,
+            tone: "amber" as const,
+        },
+        {
+            title: "In Maintenance",
+            count: maintenanceCount,
+            description: "These assets are out of circulation and may need follow-up to return to service.",
+            emptyMessage: "No assets are currently marked as under maintenance.",
+            href: buildAssetListHref(slug, { status: "MAINTENANCE" }),
+            actionLabel: "Open maintenance queue",
+            icon: Wrench,
+            tone: "blue" as const,
+        },
+        {
+            title: "Poor Condition",
+            count: poorConditionCount,
+            description: "These assets are flagged as poor condition and likely need review, repair, or retirement.",
+            emptyMessage: "No active assets are currently marked as poor condition.",
+            href: buildAssetListHref(slug, { condition: "POOR" }),
+            actionLabel: "Review condition risks",
+            icon: AlertTriangle,
+            tone: "orange" as const,
+        },
+        {
+            title: "Archived Assets",
+            count: archivedAssetsCount,
+            description: "Use this view to restore archived assets or clean up older inventory decisions.",
+            emptyMessage: "There are no archived assets waiting for follow-up.",
+            href: buildAssetListHref(slug, { archived: "true" }),
+            actionLabel: "Review archived inventory",
+            icon: ArchiveIcon,
+            tone: "zinc" as const,
+        },
+    ];
+
+    const quickActions = [
+        {
+            title: "View Inventory",
+            description: "Open the full asset list and jump into filtering, exporting, and bulk operations.",
+            href: `/t/${slug}/assets`,
+            icon: FolderKanban,
+        },
+        {
+            title: "Scan Asset",
+            description: "Use the scanner to pull up an asset quickly from a QR code.",
+            href: `/t/${slug}/scan`,
+            icon: ScanLine,
+        },
+        {
+            title: "Review Archived",
+            description: "Check archived assets and restore anything that should be active again.",
+            href: buildAssetListHref(slug, { archived: "true" }),
+            icon: ArchiveIcon,
+        },
+        ...(isManager
+            ? [
+                {
+                    title: "Add Asset",
+                    description: "Create a new asset record and put it straight into inventory.",
+                    href: `/t/${slug}/assets/new`,
+                    icon: PackagePlus,
+                },
+            ]
+            : []),
+        ...(isAdmin
+            ? [
+                {
+                    title: "Manage Team",
+                    description: "Invite teammates, adjust roles, and keep tenant access organized.",
+                    href: `/t/${slug}/users`,
+                    icon: Users,
+                },
+                {
+                    title: "Manage Categories",
+                    description: "Update category structure and custom fields without leaving the workspace.",
+                    href: `/t/${slug}/settings/categories`,
+                    icon: FolderKanban,
+                },
+            ]
+            : []),
+    ];
+
     return (
         <div>
             <h2 className="text-2xl font-bold">Dashboard</h2>
@@ -223,6 +358,42 @@ export default async function TenantDashboardPage({
                     iconName="users"
                     color="default"
                 />
+            </div>
+
+            {/* Action Center */}
+            <div className="mt-8">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                            Action Center
+                        </h3>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                            Start here for the items most likely to need attention today.
+                        </p>
+                    </div>
+                    <Link
+                        href={`/t/${slug}/assets`}
+                        className="text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400"
+                    >
+                        Open full inventory
+                    </Link>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    {actionCenterCards.map((card) => (
+                        <ActionCenterCard
+                            key={card.title}
+                            title={card.title}
+                            count={card.count}
+                            description={card.description}
+                            emptyMessage={card.emptyMessage}
+                            href={card.href}
+                            actionLabel={card.actionLabel}
+                            icon={card.icon}
+                            tone={card.tone}
+                        />
+                    ))}
+                </div>
             </div>
 
             {/* Charts Section */}
@@ -279,28 +450,22 @@ export default async function TenantDashboardPage({
 
             {/* Quick Actions */}
             <div className="mt-8">
-                <h3 className="text-lg font-semibold">Quick Actions</h3>
-                <div className="mt-4 flex flex-wrap gap-4">
-                    <Link
-                        href={`/t/${slug}/assets`}
-                        className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-                    >
-                        View Assets
-                    </Link>
-                    <Link
-                        href={`/t/${slug}/scan`}
-                        className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-                    >
-                        Scan Asset
-                    </Link>
-                    {(user.role === "ADMIN" || user.isSuperAdmin) && (
-                        <Link
-                            href={`/t/${slug}/users`}
-                            className="rounded-lg border bg-white px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-                        >
-                            Manage Users
-                        </Link>
-                    )}
+                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                    Quick Actions
+                </h3>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                    Shortcuts for the workflows people use most often.
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {quickActions.map((action) => (
+                        <QuickActionTile
+                            key={action.title}
+                            title={action.title}
+                            description={action.description}
+                            href={action.href}
+                            icon={action.icon}
+                        />
+                    ))}
                 </div>
             </div>
 

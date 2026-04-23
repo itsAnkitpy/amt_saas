@@ -76,7 +76,7 @@ export function WarrantyAlert({ expiringAssets, expiredAssets, tenantSlug }: War
                     </div>
                     {hasMoreExpired && (
                         <Link
-                            href={`/t/${tenantSlug}/assets?warrantyExpired=true`}
+                            href={`/t/${tenantSlug}/assets?warranty=expired`}
                             className="mt-2 flex items-center justify-center gap-1 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400"
                         >
                             View all {expiredAssets.length} expired
@@ -116,7 +116,7 @@ export function WarrantyAlert({ expiringAssets, expiredAssets, tenantSlug }: War
                     </div>
                     {hasMoreExpiring && (
                         <Link
-                            href={`/t/${tenantSlug}/assets?warrantyExpiring=true`}
+                            href={`/t/${tenantSlug}/assets?warranty=expiring`}
                             className="mt-2 flex items-center justify-center gap-1 text-xs font-medium text-amber-600 hover:text-amber-700 dark:text-amber-400"
                         >
                             View all {expiringAssets.length} expiring
