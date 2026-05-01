@@ -47,6 +47,7 @@ interface AssetMaintenanceCardProps {
     jobs: MaintenanceJob[];
     canManageMaintenance: boolean;
     isArchived: boolean;
+    attentionState: "overdue" | "dueSoon" | "none";
 }
 
 function formatInterval(value: number, unit: MaintenanceIntervalUnit) {
@@ -75,6 +76,7 @@ export function AssetMaintenanceCard({
     jobs,
     canManageMaintenance,
     isArchived,
+    attentionState,
 }: AssetMaintenanceCardProps) {
     const [isPending, startTransition] = useTransition();
     const currentJob = useMemo(
@@ -202,6 +204,25 @@ export function AssetMaintenanceCard({
             {schedule?.instructions && (
                 <div className="mt-4 rounded-lg bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
                     {schedule.instructions}
+                </div>
+            )}
+
+            {currentJob && attentionState !== "none" && (
+                <div
+                    className={
+                        attentionState === "overdue"
+                            ? "mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300"
+                            : "mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300"
+                    }
+                >
+                    <div className="flex items-start gap-2">
+                        <ShieldAlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                        <p>
+                            {attentionState === "overdue"
+                                ? "This maintenance job is overdue and should be handled first."
+                                : "This maintenance job is due within the next 7 days and should be planned now."}
+                        </p>
+                    </div>
                 </div>
             )}
 

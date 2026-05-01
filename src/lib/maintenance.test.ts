@@ -6,6 +6,8 @@ const require = createRequire(import.meta.url);
 const {
     addMaintenanceInterval,
     formatMaintenanceInterval,
+    getMaintenanceAttentionState,
+    getTenantMaintenanceAttentionSummary,
     getMaintenanceDueSoonRange,
 } = require("./maintenance.ts") as typeof import("./maintenance");
 
@@ -43,4 +45,147 @@ test("getMaintenanceDueSoonRange covers today through the next 7 calendar days",
 test("formatMaintenanceInterval returns a readable label", () => {
     assert.equal(formatMaintenanceInterval(1, "YEARS"), "Every 1 year");
     assert.equal(formatMaintenanceInterval(6, "MONTHS"), "Every 6 months");
+});
+
+test("getMaintenanceAttentionState marks open jobs before today as overdue", () => {
+    const baseDate = new Date("2026-04-23T10:00:00.000Z");
+    const { start } = getMaintenanceDueSoonRange(baseDate);
+    const attention = getMaintenanceAttentionState(
+        {
+            status: "OPEN",
+            dueAt: new Date(start.getTime() - 1),
+        },
+        baseDate
+    );
+
+    assert.equal(attention, "overdue");
+});
+
+test("getMaintenanceAttentionState marks open jobs due today or within 7 days as dueSoon", () => {
+    const baseDate = new Date("2026-04-23T10:00:00.000Z");
+    const { start, end } = getMaintenanceDueSoonRange(baseDate);
+
+    assert.equal(
+        getMaintenanceAttentionState(
+            {
+                status: "OPEN",
+                dueAt: start,
+            },
+            baseDate
+        ),
+        "dueSoon"
+    );
+
+    assert.equal(
+        getMaintenanceAttentionState(
+            {
+                status: "OPEN",
+                dueAt: end,
+            },
+            baseDate
+        ),
+        "dueSoon"
+    );
+});
+
+test("getMaintenanceAttentionState ignores later open jobs", () => {
+    const baseDate = new Date("2026-04-23T10:00:00.000Z");
+    const { end } = getMaintenanceDueSoonRange(baseDate);
+    const attention = getMaintenanceAttentionState(
+        {
+            status: "OPEN",
+            dueAt: new Date(end.getTime() + 1),
+        },
+        baseDate
+    );
+
+    assert.equal(attention, "none");
+});
+
+test("getMaintenanceAttentionState ignores non-open jobs", () => {
+    const baseDate = new Date("2026-04-23T10:00:00.000Z");
+    const { start } = getMaintenanceDueSoonRange(baseDate);
+
+    assert.equal(
+        getMaintenanceAttentionState(
+            {
+                status: "IN_PROGRESS",
+                dueAt: new Date(start.getTime() - 1),
+            },
+            baseDate
+        ),
+        "none"
+    );
+    assert.equal(
+        getMaintenanceAttentionState(
+            {
+                status: "COMPLETED",
+                dueAt: start,
+            },
+            baseDate
+        ),
+        "none"
+    );
+    assert.equal(
+        getMaintenanceAttentionState(
+            {
+                status: "CANCELLED",
+                dueAt: start,
+            },
+            baseDate
+        ),
+        "none"
+    );
+});
+
+test("getTenantMaintenanceAttentionSummary counts only open tenant jobs on active assets", async () => {
+    const receivedWhere: unknown[] = [];
+    const baseDate = new Date("2026-04-23T10:00:00.000Z");
+    const { start, end } = getMaintenanceDueSoonRange(baseDate);
+
+    const fakeClient = {
+        maintenanceJob: {
+            count: async (args: { where: unknown }) => {
+                receivedWhere.push(args.where);
+                return receivedWhere.length === 1 ? 2 : 3;
+            },
+        },
+    };
+
+    const summary = await getTenantMaintenanceAttentionSummary(
+        "tenant_123",
+        baseDate,
+        fakeClient as unknown as Parameters<
+            typeof getTenantMaintenanceAttentionSummary
+        >[2]
+    );
+
+    assert.deepEqual(summary, {
+        overdueCount: 2,
+        dueSoonCount: 3,
+        attentionCount: 5,
+    });
+
+    assert.deepEqual(receivedWhere[0], {
+        asset: {
+            tenantId: "tenant_123",
+            archivedAt: null,
+        },
+        status: "OPEN",
+        dueAt: {
+            lt: start,
+        },
+    });
+
+    assert.deepEqual(receivedWhere[1], {
+        asset: {
+            tenantId: "tenant_123",
+            archivedAt: null,
+        },
+        status: "OPEN",
+        dueAt: {
+            gte: start,
+            lte: end,
+        },
+    });
 });

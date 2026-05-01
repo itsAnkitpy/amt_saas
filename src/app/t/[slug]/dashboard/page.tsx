@@ -21,7 +21,7 @@ import {
     Wrench,
 } from "lucide-react";
 import { hasRole } from "@/lib/auth";
-import { getMaintenanceDueSoonRange } from "@/lib/maintenance";
+import { getTenantMaintenanceAttentionSummary } from "@/lib/maintenance";
 
 interface TenantDashboardPageProps {
     params: Promise<{ slug: string }>;
@@ -68,8 +68,6 @@ export default async function TenantDashboardPage({
 
     const now = new Date();
     const thirtyDaysFromNow = addDays(now, 30);
-    const { start: maintenanceDueSoonStart, end: maintenanceDueSoonEnd } =
-        getMaintenanceDueSoonRange(now);
 
     // Get all stats and chart data in parallel for performance
     const [
@@ -78,8 +76,7 @@ export default async function TenantDashboardPage({
         availableCount,
         assignedCount,
         maintenanceCount,
-        maintenanceOverdueCount,
-        maintenanceDueSoonCount,
+        maintenanceAttention,
         poorConditionCount,
         archivedAssetsCount,
         totalValueResult,
@@ -95,23 +92,7 @@ export default async function TenantDashboardPage({
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "AVAILABLE" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "ASSIGNED" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, status: "MAINTENANCE" } }),
-        db.maintenanceJob.count({
-            where: {
-                asset: { tenantId: tenant.id, archivedAt: null },
-                status: "OPEN",
-                dueAt: { lt: maintenanceDueSoonStart },
-            },
-        }),
-        db.maintenanceJob.count({
-            where: {
-                asset: { tenantId: tenant.id, archivedAt: null },
-                status: "OPEN",
-                dueAt: {
-                    gte: maintenanceDueSoonStart,
-                    lte: maintenanceDueSoonEnd,
-                },
-            },
-        }),
+        getTenantMaintenanceAttentionSummary(tenant.id, now),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: null, condition: "POOR" } }),
         db.asset.count({ where: { tenantId: tenant.id, archivedAt: { not: null } } }),
         db.asset.aggregate({
@@ -231,6 +212,11 @@ export default async function TenantDashboardPage({
         details: activity.details as Record<string, unknown> | null,
         asset: activity.asset,
     }));
+
+    const {
+        overdueCount: maintenanceOverdueCount,
+        dueSoonCount: maintenanceDueSoonCount,
+    } = maintenanceAttention;
 
     const isManager = hasRole(user, "MANAGER");
     const isAdmin = hasRole(user, "ADMIN");

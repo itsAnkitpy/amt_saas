@@ -19,6 +19,7 @@ import {
     SidebarFooter,
     SidebarHeader,
     SidebarMenu,
+    SidebarMenuBadge,
     SidebarMenuItem,
     SidebarMenuButton,
     SidebarGroup,
@@ -32,6 +33,11 @@ interface AppSidebarProps {
     tenantPlan: string;
     isAdmin: boolean;
     isSuperAdmin: boolean;
+    maintenanceAttention: {
+        overdueCount: number;
+        dueSoonCount: number;
+        attentionCount: number;
+    };
 }
 
 export function AppSidebar({
@@ -40,6 +46,7 @@ export function AppSidebar({
     tenantPlan,
     isAdmin,
     isSuperAdmin,
+    maintenanceAttention,
 }: AppSidebarProps) {
     const pathname = usePathname();
     const navItemClassName =
@@ -125,6 +132,18 @@ export function AppSidebar({
                                             <span>{item.title}</span>
                                         </Link>
                                     </SidebarMenuButton>
+                                    {item.title === 'Maintenance' &&
+                                        maintenanceAttention.attentionCount > 0 && (
+                                            <SidebarMenuBadge
+                                                className={
+                                                    maintenanceAttention.overdueCount > 0
+                                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                }
+                                            >
+                                                {maintenanceAttention.attentionCount}
+                                            </SidebarMenuBadge>
+                                        )}
                                 </SidebarMenuItem>
                             ))}
                         </SidebarMenu>

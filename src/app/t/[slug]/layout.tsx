@@ -8,6 +8,7 @@ import {
     SidebarTrigger,
     SidebarInset,
 } from "@/components/ui/sidebar";
+import { getTenantMaintenanceAttentionSummary } from "@/lib/maintenance";
 
 interface TenantLayoutProps {
     children: React.ReactNode;
@@ -30,6 +31,9 @@ export default async function TenantLayout({
     const { user, tenant } = await requireTenantAccess(slug);
 
     const isAdmin = user.role === "ADMIN" || user.isSuperAdmin;
+    const maintenanceAttention = await getTenantMaintenanceAttentionSummary(
+        tenant.id
+    );
 
     return (
         <SidebarProvider>
@@ -40,6 +44,7 @@ export default async function TenantLayout({
                 tenantPlan={tenant.plan}
                 isAdmin={isAdmin}
                 isSuperAdmin={user.isSuperAdmin}
+                maintenanceAttention={maintenanceAttention}
             />
 
             {/* Main Content Area */}

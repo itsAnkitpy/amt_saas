@@ -21,6 +21,7 @@ import {
 } from "./asset-action-buttons";
 import { ActivityTimeline } from "@/components/activity-timeline";
 import { AssetMaintenanceCard } from "./asset-maintenance-card";
+import { getMaintenanceAttentionState } from "@/lib/maintenance";
 
 interface AssetDetailPageProps {
     params: Promise<{ slug: string; id: string }>;
@@ -84,6 +85,16 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
             orderBy: { firstName: "asc" },
         })
         : [];
+    const currentOpenMaintenanceJob =
+        asset.maintenanceJobs.find((job) => job.status === "OPEN") ?? null;
+    const maintenanceAttention = getMaintenanceAttentionState(
+        currentOpenMaintenanceJob
+            ? {
+                status: currentOpenMaintenanceJob.status,
+                dueAt: currentOpenMaintenanceJob.dueAt,
+            }
+            : null
+    );
 
     return (
         <div className="mx-auto max-w-4xl">
@@ -259,6 +270,7 @@ export default async function AssetDetailPage({ params }: AssetDetailPageProps) 
                             cost: job.cost?.toString() ?? null,
                             completedByName: job.completedByName,
                         }))}
+                        attentionState={maintenanceAttention}
                     />
 
                     {/* Notes */}

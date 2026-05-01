@@ -22,10 +22,28 @@ import {
 
 type AssetServiceContext = Awaited<ReturnType<typeof requireTenantAccess>>;
 
+type AssetAuditUser = Pick<
+    AssetServiceContext["user"],
+    "id" | "firstName" | "lastName"
+>;
+
+interface AssetMutationActor {
+    tenantId: string;
+    user: AssetAuditUser;
+}
+
 type AssetMutationDbClient = Pick<
     typeof db,
     "asset" | "assetActivity" | "assetAssignment" | "assetCategory" | "user"
 >;
+
+type AssetArchivalDbClient = Pick<
+    typeof db,
+    "asset" | "assetActivity" | "assetMaintenanceSchedule" | "maintenanceJob"
+>;
+
+type AssetActivityLogger = typeof logAssetActivity;
+type MaintenanceDeactivator = typeof deactivateMaintenanceForAssets;
 
 type AssetAssignmentState = {
     id: string;
@@ -374,6 +392,153 @@ function dedupeAssetIds(assetIds: string[]) {
     return Array.from(new Set(assetIds));
 }
 
+export async function assignAssetWithContext(
+    params: AssetMutationActor & {
+        assetId: string;
+        assigneeId: string;
+        notes?: string;
+    },
+    client: AssetMutationDbClient,
+    activityLogger: AssetActivityLogger = logAssetActivity
+) {
+    const asset = await client.asset.findFirst({
+        where: {
+            id: params.assetId,
+            tenantId: params.tenantId,
+        },
+        select: {
+            id: true,
+            status: true,
+            assignedToId: true,
+            archivedAt: true,
+        },
+    });
+
+    if (!asset) {
+        throw notFound("Asset not found");
+    }
+
+    assertAssetCanBeAssigned(asset);
+
+    const assignee = await getAssignableUserForTenantOrThrow(
+        client,
+        params.assigneeId,
+        params.tenantId
+    );
+
+    await client.assetAssignment.create({
+        data: {
+            assetId: asset.id,
+            userId: assignee.id,
+            notes: params.notes?.trim() || null,
+        },
+    });
+
+    await client.asset.update({
+        where: { id: asset.id },
+        data: {
+            assignedToId: assignee.id,
+            status: "ASSIGNED",
+        },
+    });
+
+    await activityLogger(
+        {
+            action: "ASSIGNED",
+            assetId: asset.id,
+            userId: params.user.id,
+            userName: getUserDisplayName(params.user),
+            tenantId: params.tenantId,
+            details: {
+                assignedTo: getUserDisplayName(assignee),
+            },
+        },
+        client
+    );
+
+    return asset;
+}
+
+export async function unassignAssetWithContext(
+    params: AssetMutationActor & {
+        assetId: string;
+        notes?: string;
+    },
+    client: AssetMutationDbClient,
+    activityLogger: AssetActivityLogger = logAssetActivity
+) {
+    const asset = await client.asset.findFirst({
+        where: {
+            id: params.assetId,
+            tenantId: params.tenantId,
+        },
+        select: {
+            id: true,
+            status: true,
+            assignedToId: true,
+            archivedAt: true,
+        },
+    });
+
+    if (!asset) {
+        throw notFound("Asset not found");
+    }
+
+    assertAssetCanBeUnassigned(asset);
+
+    const currentAssignment = await client.assetAssignment.findFirst({
+        where: {
+            assetId: asset.id,
+            returnedAt: null,
+        },
+        orderBy: { assignedAt: "desc" },
+        include: {
+            user: {
+                select: {
+                    firstName: true,
+                    lastName: true,
+                },
+            },
+        },
+    });
+
+    if (!currentAssignment) {
+        throw badRequest("Active assignment record not found");
+    }
+
+    await client.assetAssignment.update({
+        where: { id: currentAssignment.id },
+        data: {
+            returnedAt: new Date(),
+            notes: params.notes?.trim() || currentAssignment.notes || null,
+        },
+    });
+
+    await client.asset.update({
+        where: { id: asset.id },
+        data: {
+            assignedToId: null,
+            status: "AVAILABLE",
+        },
+    });
+
+    await activityLogger(
+        {
+            action: "UNASSIGNED",
+            assetId: asset.id,
+            userId: params.user.id,
+            userName: getUserDisplayName(params.user),
+            tenantId: params.tenantId,
+            details: {
+                previousAssignee: getUserDisplayName(currentAssignment.user),
+            },
+        },
+        client
+    );
+
+    return asset;
+}
+
 export async function createAssetForTenant(
     tenantSlug: string,
     formData: FormData
@@ -604,75 +769,146 @@ export async function updateAssetForTenant(
     });
 }
 
+export async function archiveAssetWithContext(
+    params: AssetMutationActor & {
+        assetId: string;
+    },
+    client: AssetArchivalDbClient,
+    activityLogger: AssetActivityLogger = logAssetActivity,
+    maintenanceDeactivator: MaintenanceDeactivator = deactivateMaintenanceForAssets
+) {
+    const asset = await client.asset.findFirst({
+        where: {
+            id: params.assetId,
+            tenantId: params.tenantId,
+        },
+        select: {
+            id: true,
+            name: true,
+            assignedToId: true,
+            archivedAt: true,
+        },
+    });
+
+    if (!asset) {
+        throw notFound("Asset not found");
+    }
+
+    assertAssetNotArchived(asset);
+
+    if (asset.assignedToId) {
+        throw badRequest("Unassign the asset before deleting it");
+    }
+
+    const archivedAt = new Date();
+
+    await client.asset.update({
+        where: { id: asset.id },
+        data: {
+            status: "RETIRED",
+            archivedAt,
+        },
+    });
+
+    await maintenanceDeactivator(
+        {
+            assetIds: [asset.id],
+            reason: "asset_archived",
+            userId: params.user.id,
+            userName: getUserDisplayName(params.user),
+            tenantId: params.tenantId,
+            disabledAt: archivedAt,
+        },
+        client
+    );
+
+    await activityLogger(
+        {
+            action: "DELETED",
+            assetId: asset.id,
+            userId: params.user.id,
+            userName: getUserDisplayName(params.user),
+            tenantId: params.tenantId,
+            details: {
+                reason: "soft_delete",
+                archivedAt: archivedAt.toISOString(),
+            },
+        },
+        client
+    );
+
+    return asset;
+}
+
 export async function deleteAssetForTenant(
     tenantSlug: string,
     assetId: string
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
-    return db.$transaction(async (tx) => {
-        const asset = await tx.asset.findFirst({
-            where: {
-                id: assetId,
-                tenantId: tenant.id,
-            },
-            select: {
-                id: true,
-                name: true,
-                assignedToId: true,
-                archivedAt: true,
-            },
-        });
-
-        if (!asset) {
-            throw notFound("Asset not found");
-        }
-
-        assertAssetNotArchived(asset);
-
-        if (asset.assignedToId) {
-            throw badRequest("Unassign the asset before deleting it");
-        }
-
-        const archivedAt = new Date();
-
-        await tx.asset.update({
-            where: { id: asset.id },
-            data: {
-                status: "RETIRED",
-                archivedAt,
-            },
-        });
-
-        await deactivateMaintenanceForAssets(
+    return db.$transaction((tx) =>
+        archiveAssetWithContext(
             {
-                assetIds: [asset.id],
-                reason: "asset_archived",
-                userId: user.id,
-                userName: getUserDisplayName(user),
+                assetId,
                 tenantId: tenant.id,
-                disabledAt: archivedAt,
+                user,
             },
             tx
-        );
+        )
+    );
+}
 
-        await logAssetActivity(
-            {
-                action: "DELETED",
-                assetId: asset.id,
-                userId: user.id,
-                userName: getUserDisplayName(user),
-                tenantId: tenant.id,
-                details: {
-                    reason: "soft_delete",
-                    archivedAt: archivedAt.toISOString(),
-                },
-            },
-            tx
-        );
-
-        return asset;
+export async function restoreAssetWithContext(
+    params: AssetMutationActor & {
+        assetId: string;
+    },
+    client: Pick<typeof db, "asset" | "assetActivity">,
+    activityLogger: AssetActivityLogger = logAssetActivity
+) {
+    const asset = await client.asset.findFirst({
+        where: {
+            id: params.assetId,
+            tenantId: params.tenantId,
+        },
+        select: {
+            id: true,
+            status: true,
+            archivedAt: true,
+        },
     });
+
+    if (!asset) {
+        throw notFound("Asset not found");
+    }
+
+    assertAssetIsArchived(asset);
+
+    const restoredAt = new Date();
+
+    await client.asset.update({
+        where: { id: asset.id },
+        data: {
+            status: "AVAILABLE",
+            archivedAt: null,
+        },
+    });
+
+    await activityLogger(
+        {
+            action: "RESTORED",
+            assetId: asset.id,
+            userId: params.user.id,
+            userName: getUserDisplayName(params.user),
+            tenantId: params.tenantId,
+            details: {
+                previousStatus: asset.status,
+                restoredAt: restoredAt.toISOString(),
+            },
+        },
+        client
+    );
+
+    return asset;
 }
 
 export async function restoreAssetForTenant(
@@ -681,52 +917,16 @@ export async function restoreAssetForTenant(
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
-    return db.$transaction(async (tx) => {
-        const asset = await tx.asset.findFirst({
-            where: {
-                id: assetId,
-                tenantId: tenant.id,
-            },
-            select: {
-                id: true,
-                status: true,
-                archivedAt: true,
-            },
-        });
-
-        if (!asset) {
-            throw notFound("Asset not found");
-        }
-
-        assertAssetIsArchived(asset);
-
-        const restoredAt = new Date();
-
-        await tx.asset.update({
-            where: { id: asset.id },
-            data: {
-                status: "AVAILABLE",
-                archivedAt: null,
-            },
-        });
-
-        await logAssetActivity(
+    return db.$transaction((tx) =>
+        restoreAssetWithContext(
             {
-                action: "RESTORED",
-                assetId: asset.id,
-                userId: user.id,
-                userName: getUserDisplayName(user),
+                assetId,
                 tenantId: tenant.id,
-                details: {
-                    previousStatus: asset.status,
-                    restoredAt: restoredAt.toISOString(),
-                },
+                user,
             },
             tx
-        );
-
-        return asset;
-    });
+        )
+    );
 }
 
 export async function assignAssetForTenant(
@@ -737,64 +937,18 @@ export async function assignAssetForTenant(
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
-    return db.$transaction(async (tx) => {
-        const asset = await tx.asset.findFirst({
-            where: {
-                id: assetId,
-                tenantId: tenant.id,
-            },
-            select: {
-                id: true,
-                status: true,
-                assignedToId: true,
-                archivedAt: true,
-            },
-        });
-
-        if (!asset) {
-            throw notFound("Asset not found");
-        }
-
-        assertAssetCanBeAssigned(asset);
-
-        const assignee = await getAssignableUserForTenantOrThrow(
-            tx,
-            assigneeId,
-            tenant.id
-        );
-
-        await tx.assetAssignment.create({
-            data: {
-                assetId: asset.id,
-                userId: assignee.id,
-                notes: notes?.trim() || null,
-            },
-        });
-
-        await tx.asset.update({
-            where: { id: asset.id },
-            data: {
-                assignedToId: assignee.id,
-                status: "ASSIGNED",
-            },
-        });
-
-        await logAssetActivity(
+    return db.$transaction((tx) =>
+        assignAssetWithContext(
             {
-                action: "ASSIGNED",
-                assetId: asset.id,
-                userId: user.id,
-                userName: getUserDisplayName(user),
+                assetId,
+                assigneeId,
+                notes,
                 tenantId: tenant.id,
-                details: {
-                    assignedTo: getUserDisplayName(assignee),
-                },
+                user,
             },
             tx
-        );
-
-        return asset;
-    });
+        )
+    );
 }
 
 export async function unassignAssetForTenant(
@@ -804,78 +958,17 @@ export async function unassignAssetForTenant(
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
-    return db.$transaction(async (tx) => {
-        const asset = await tx.asset.findFirst({
-            where: {
-                id: assetId,
-                tenantId: tenant.id,
-            },
-            select: {
-                id: true,
-                status: true,
-                assignedToId: true,
-                archivedAt: true,
-            },
-        });
-
-        if (!asset) {
-            throw notFound("Asset not found");
-        }
-
-        assertAssetCanBeUnassigned(asset);
-
-        const currentAssignment = await tx.assetAssignment.findFirst({
-            where: {
-                assetId: asset.id,
-                returnedAt: null,
-            },
-            orderBy: { assignedAt: "desc" },
-            include: {
-                user: {
-                    select: {
-                        firstName: true,
-                        lastName: true,
-                    },
-                },
-            },
-        });
-
-        if (!currentAssignment) {
-            throw badRequest("Active assignment record not found");
-        }
-
-        await tx.assetAssignment.update({
-            where: { id: currentAssignment.id },
-            data: {
-                returnedAt: new Date(),
-                notes: notes?.trim() || currentAssignment.notes || null,
-            },
-        });
-
-        await tx.asset.update({
-            where: { id: asset.id },
-            data: {
-                assignedToId: null,
-                status: "AVAILABLE",
-            },
-        });
-
-        await logAssetActivity(
+    return db.$transaction((tx) =>
+        unassignAssetWithContext(
             {
-                action: "UNASSIGNED",
-                assetId: asset.id,
-                userId: user.id,
-                userName: getUserDisplayName(user),
+                assetId,
+                notes,
                 tenantId: tenant.id,
-                details: {
-                    previousAssignee: getUserDisplayName(currentAssignment.user),
-                },
+                user,
             },
             tx
-        );
-
-        return asset;
-    });
+        )
+    );
 }
 
 export async function bulkUpdateAssetStatusForTenant(

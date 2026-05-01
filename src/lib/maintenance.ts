@@ -1,6 +1,7 @@
 import { addDays, addMonths, addWeeks, addYears, endOfDay, startOfDay } from "date-fns";
 import {
     type AssetAction,
+    type MaintenanceJobStatus,
     type MaintenanceIntervalUnit,
     type Prisma,
 } from "@/generated/prisma";
@@ -37,6 +38,20 @@ interface DeactivateMaintenanceParams extends MaintenanceActor {
 }
 
 export const MAINTENANCE_DUE_SOON_DAYS = 7;
+export type MaintenanceAttentionState = "overdue" | "dueSoon" | "none";
+
+type MaintenanceAttentionJob = {
+    status: MaintenanceJobStatus | string;
+    dueAt: Date;
+};
+
+type MaintenanceAttentionSummaryClient = Pick<typeof db, "maintenanceJob">;
+
+export interface MaintenanceAttentionSummary {
+    overdueCount: number;
+    dueSoonCount: number;
+    attentionCount: number;
+}
 
 export function addMaintenanceInterval(
     baseDate: Date,
@@ -77,6 +92,67 @@ export function getMaintenanceDueSoonRange(baseDate = new Date()) {
     const end = endOfDay(addDays(start, MAINTENANCE_DUE_SOON_DAYS));
 
     return { start, end };
+}
+
+export function getMaintenanceAttentionState(
+    job: MaintenanceAttentionJob | null | undefined,
+    baseDate = new Date()
+): MaintenanceAttentionState {
+    if (!job || job.status !== "OPEN") {
+        return "none";
+    }
+
+    const { start, end } = getMaintenanceDueSoonRange(baseDate);
+
+    if (job.dueAt < start) {
+        return "overdue";
+    }
+
+    if (job.dueAt <= end) {
+        return "dueSoon";
+    }
+
+    return "none";
+}
+
+export async function getTenantMaintenanceAttentionSummary(
+    tenantId: string,
+    baseDate = new Date(),
+    client: MaintenanceAttentionSummaryClient = db
+): Promise<MaintenanceAttentionSummary> {
+    const { start, end } = getMaintenanceDueSoonRange(baseDate);
+
+    const [overdueCount, dueSoonCount] = await Promise.all([
+        client.maintenanceJob.count({
+            where: {
+                asset: {
+                    tenantId,
+                    archivedAt: null,
+                },
+                status: "OPEN",
+                dueAt: { lt: start },
+            },
+        }),
+        client.maintenanceJob.count({
+            where: {
+                asset: {
+                    tenantId,
+                    archivedAt: null,
+                },
+                status: "OPEN",
+                dueAt: {
+                    gte: start,
+                    lte: end,
+                },
+            },
+        }),
+    ]);
+
+    return {
+        overdueCount,
+        dueSoonCount,
+        attentionCount: overdueCount + dueSoonCount,
+    };
 }
 
 export async function createMaintenanceScheduleWithFirstJob(
