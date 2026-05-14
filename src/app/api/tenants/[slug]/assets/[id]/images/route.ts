@@ -34,7 +34,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         const { slug, id: assetId } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const { slug, id: assetId } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }

@@ -3,6 +3,10 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import type { User, Tenant } from "@/generated/prisma";
 
+export type TenantApiAccessResult =
+    | { ok: true; user: User; tenant: Tenant }
+    | { ok: false; error: string; status: number };
+
 /**
  * Gets the current authenticated user from our database.
  * Returns null if not authenticated or user not found in DB.
@@ -114,16 +118,15 @@ export async function isSuperAdmin(): Promise<boolean> {
  * Use this in API route handlers instead of requireTenantAccess.
  *
  * @param tenantSlug - The tenant slug to check access for
- * @returns User and tenant on success, error object on failure
+ * @returns Discriminated result: ok=true has user and tenant, ok=false has API error details
  */
-export async function checkTenantAccessForApi(tenantSlug: string): Promise<
-    | { user: User; tenant: Tenant }
-    | { error: string; status: number }
-> {
+export async function checkTenantAccessForApi(
+    tenantSlug: string
+): Promise<TenantApiAccessResult> {
     const user = await getCurrentUserWithTenant();
 
     if (!user) {
-        return { error: 'Unauthorized', status: 401 };
+        return { ok: false, error: 'Unauthorized', status: 401 };
     }
 
     const tenant = await db.tenant.findUnique({
@@ -131,20 +134,20 @@ export async function checkTenantAccessForApi(tenantSlug: string): Promise<
     });
 
     if (!tenant) {
-        return { error: 'Tenant not found', status: 404 };
+        return { ok: false, error: 'Tenant not found', status: 404 };
     }
 
     // Superadmin can access any tenant
     if (user.isSuperAdmin) {
-        return { user, tenant };
+        return { ok: true, user, tenant };
     }
 
     // Regular user must belong to this tenant
     if (user.tenantId !== tenant.id) {
-        return { error: 'Access denied', status: 403 };
+        return { ok: false, error: 'Access denied', status: 403 };
     }
 
-    return { user, tenant };
+    return { ok: true, user, tenant };
 }
 
 // ============================================

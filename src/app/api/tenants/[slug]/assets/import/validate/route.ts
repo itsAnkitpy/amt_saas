@@ -15,6 +15,7 @@ import {
     serializeImportableRows,
     toImportRowContexts,
 } from '@/lib/asset-import';
+import { validateAssetImportRowForCreate } from '@/lib/asset-rules';
 import { parseCSV } from '@/lib/csv-utils';
 import type { FieldDefinition } from '@/lib/validations';
 
@@ -24,8 +25,6 @@ interface RouteParams {
     }>;
 }
 
-const VALID_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'];
-const VALID_CONDITIONS = ['EXCELLENT', 'GOOD', 'FAIR', 'POOR'];
 const MAX_ROWS = 1000;
 const PREVIEW_LIMIT = 20;
 
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const { slug } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }
@@ -111,10 +110,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const validationErrorMap = new Map<number, string[]>();
 
         for (const row of rowContexts) {
-            const { valid, errors } = validateRow(
-                row.data as Record<string, string>,
-                fieldSchema
-            );
+            const { valid, errors } = validateAssetImportRowForCreate({
+                row: row.data,
+                categoryId,
+                fieldSchema,
+            });
 
             if (!valid) {
                 validationErrorMap.set(row.rowNumber, errors);
@@ -177,70 +177,4 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             { status: 500 }
         );
     }
-}
-
-/**
- * Validate a single row against schema
- */
-function validateRow(
-    row: Record<string, string>,
-    fieldSchema: FieldDefinition[]
-): { valid: boolean; errors: string[] } {
-    const errors: string[] = [];
-
-    // Required: name
-    if (!row.name || !row.name.trim()) {
-        errors.push('Name is required');
-    }
-
-    // Enum: status (optional, defaults to AVAILABLE)
-    if (row.status && !VALID_STATUSES.includes(row.status.toUpperCase())) {
-        errors.push(`Invalid status: ${row.status}. Must be one of: ${VALID_STATUSES.join(', ')}`);
-    }
-
-    // Enum: condition (optional, defaults to GOOD)
-    if (row.condition && !VALID_CONDITIONS.includes(row.condition.toUpperCase())) {
-        errors.push(`Invalid condition: ${row.condition}. Must be one of: ${VALID_CONDITIONS.join(', ')}`);
-    }
-
-    // Numeric: purchasePrice
-    if (row.purchasePrice && isNaN(Number(row.purchasePrice))) {
-        errors.push('Purchase price must be a number');
-    }
-
-    // Date: purchaseDate
-    if (row.purchaseDate && isNaN(Date.parse(row.purchaseDate))) {
-        errors.push('Purchase date must be a valid date (YYYY-MM-DD)');
-    }
-
-    // Date: warrantyEnd
-    if (row.warrantyEnd && isNaN(Date.parse(row.warrantyEnd))) {
-        errors.push('Warranty end must be a valid date (YYYY-MM-DD)');
-    }
-
-    // Custom fields validation (by label)
-    for (const field of fieldSchema) {
-        const value = row[field.label];
-
-        // Required check
-        if (field.required && (!value || !value.trim())) {
-            errors.push(`${field.label} is required`);
-            continue;
-        }
-
-        if (value && value.trim()) {
-            // Type validation
-            if (field.type === 'number' && isNaN(Number(value))) {
-                errors.push(`${field.label} must be a number`);
-            }
-            if (field.type === 'date' && isNaN(Date.parse(value))) {
-                errors.push(`${field.label} must be a valid date (YYYY-MM-DD)`);
-            }
-            if (field.type === 'select' && field.options && !field.options.includes(value)) {
-                errors.push(`${field.label} must be one of: ${field.options.join(', ')}`);
-            }
-        }
-    }
-
-    return { valid: errors.length === 0, errors };
 }

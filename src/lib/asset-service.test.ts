@@ -9,11 +9,14 @@ const {
     archiveAssetWithContext,
     assignAssetWithContext,
     buildAssetUpdateActivity,
-    haveCustomFieldsChanged,
+    isAssetArchived,
     restoreAssetWithContext,
     unassignAssetWithContext,
-    validateAndNormalizeCustomFields,
 } = require("./asset-service.ts") as typeof import("./asset-service");
+const {
+    haveCustomFieldsChanged,
+    validateAndNormalizeCustomFields,
+} = require("./asset-rules.ts") as typeof import("./asset-rules");
 const { ApiError } = require("./api-error.ts") as typeof import("./api-error");
 
 type ArchiveAssetClient = Parameters<typeof archiveAssetWithContext>[1];
@@ -104,12 +107,13 @@ function createActivityLoggerSpy() {
     return { calls, logger };
 }
 
-function createMaintenanceDeactivatorSpy() {
+function createMaintenanceDeactivatorSpy(onCall?: () => void) {
     const calls: Parameters<MaintenanceDeactivator>[0][] = [];
 
     const deactivator = (async (
         params: Parameters<MaintenanceDeactivator>[0]
     ) => {
+        onCall?.();
         calls.push(params);
         return {
             hadSchedule: true,
@@ -375,6 +379,35 @@ test("buildAssetUpdateActivity records readable status changes", () => {
     );
 });
 
+test("retired status alone does not mean archived", () => {
+    assert.equal(
+        isAssetArchived({
+            archivedAt: null,
+        }),
+        false
+    );
+
+    assert.equal(
+        isAssetArchived({
+            archivedAt: new Date("2026-05-14T00:00:00.000Z"),
+        }),
+        true
+    );
+});
+
+test("marking retired is a status change, not an archive activity", () => {
+    assert.deepEqual(
+        buildAssetUpdateActivity("AVAILABLE", "RETIRED", ["status"]),
+        {
+            action: "STATUS_CHANGED",
+            details: {
+                from: "AVAILABLE",
+                to: "RETIRED",
+            },
+        }
+    );
+});
+
 test("buildAssetUpdateActivity keeps normal updates as updated events", () => {
     assert.deepEqual(
         buildAssetUpdateActivity("AVAILABLE", "AVAILABLE", ["customFields"]),
@@ -631,7 +664,9 @@ test("archiveAssetWithContext retires the asset, disables maintenance, and logs 
     });
     const { calls: activityCalls, logger } = createActivityLoggerSpy();
     const { calls: maintenanceCalls, deactivator } =
-        createMaintenanceDeactivatorSpy();
+        createMaintenanceDeactivatorSpy(() => {
+            assert.equal(state.asset?.archivedAt, null);
+        });
 
     const asset = await archiveAssetWithContext(
         {

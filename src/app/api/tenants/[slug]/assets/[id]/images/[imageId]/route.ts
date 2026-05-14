@@ -28,7 +28,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         const { slug, id: assetId, imageId } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }
@@ -141,7 +141,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const { slug, id: assetId, imageId } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }

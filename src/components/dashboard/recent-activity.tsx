@@ -17,19 +17,19 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
-import { formatActivityDetails } from '@/lib/activity-format';
+import { formatActivityDetails, getActivityActionLabel } from '@/lib/activity-format';
 
 // Activity action icons and colors - matching existing activity-timeline.tsx
 const ACTION_CONFIG: Record<string, { icon: LucideIcon; color: string; label: string }> = {
-    CREATED: { icon: PlusCircle, color: 'text-green-600', label: 'created' },
-    UPDATED: { icon: Pencil, color: 'text-blue-600', label: 'updated' },
-    DELETED: { icon: Archive, color: 'text-orange-600', label: 'archived' },
-    RESTORED: { icon: RotateCcw, color: 'text-green-600', label: 'restored' },
-    ASSIGNED: { icon: UserPlus, color: 'text-violet-600', label: 'assigned' },
-    UNASSIGNED: { icon: UserMinus, color: 'text-orange-600', label: 'unassigned' },
-    STATUS_CHANGED: { icon: RefreshCw, color: 'text-yellow-600', label: 'status changed' },
-    IMAGE_ADDED: { icon: ImagePlus, color: 'text-blue-500', label: 'image added' },
-    IMAGE_REMOVED: { icon: ImageMinus, color: 'text-zinc-500', label: 'image removed' },
+    CREATED: { icon: PlusCircle, color: 'text-green-600', label: getActivityActionLabel('CREATED') },
+    UPDATED: { icon: Pencil, color: 'text-blue-600', label: getActivityActionLabel('UPDATED') },
+    DELETED: { icon: Archive, color: 'text-orange-600', label: getActivityActionLabel('DELETED') },
+    RESTORED: { icon: RotateCcw, color: 'text-green-600', label: getActivityActionLabel('RESTORED') },
+    ASSIGNED: { icon: UserPlus, color: 'text-violet-600', label: getActivityActionLabel('ASSIGNED') },
+    UNASSIGNED: { icon: UserMinus, color: 'text-orange-600', label: getActivityActionLabel('UNASSIGNED') },
+    STATUS_CHANGED: { icon: RefreshCw, color: 'text-yellow-600', label: getActivityActionLabel('STATUS_CHANGED') },
+    IMAGE_ADDED: { icon: ImagePlus, color: 'text-blue-500', label: getActivityActionLabel('IMAGE_ADDED') },
+    IMAGE_REMOVED: { icon: ImageMinus, color: 'text-zinc-500', label: getActivityActionLabel('IMAGE_REMOVED') },
     MAINTENANCE_SCHEDULED: { icon: CalendarClock, color: 'text-violet-600', label: 'scheduled maintenance for' },
     MAINTENANCE_UPDATED: { icon: Pencil, color: 'text-blue-600', label: 'updated maintenance for' },
     MAINTENANCE_DISABLED: { icon: Ban, color: 'text-zinc-500', label: 'disabled maintenance for' },

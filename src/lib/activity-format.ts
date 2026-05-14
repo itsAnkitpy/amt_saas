@@ -20,6 +20,42 @@ const FIELD_LABELS: Record<string, string> = {
     warrantyEnd: "warranty end",
 };
 
+const ACTION_LABELS: Record<string, { sentence: string; title: string }> = {
+    ASSIGNED: { sentence: "assigned", title: "Assigned" },
+    CREATED: { sentence: "created", title: "Created" },
+    DELETED: { sentence: "archived", title: "Archived" },
+    IMAGE_ADDED: { sentence: "image added", title: "Image added" },
+    IMAGE_REMOVED: { sentence: "image removed", title: "Image removed" },
+    MAINTENANCE_CANCELLED: {
+        sentence: "maintenance cancelled",
+        title: "Maintenance cancelled",
+    },
+    MAINTENANCE_COMPLETED: {
+        sentence: "maintenance completed",
+        title: "Maintenance completed",
+    },
+    MAINTENANCE_DISABLED: {
+        sentence: "maintenance disabled",
+        title: "Maintenance disabled",
+    },
+    MAINTENANCE_SCHEDULED: {
+        sentence: "maintenance scheduled",
+        title: "Maintenance scheduled",
+    },
+    MAINTENANCE_STARTED: {
+        sentence: "maintenance started",
+        title: "Maintenance started",
+    },
+    MAINTENANCE_UPDATED: {
+        sentence: "maintenance updated",
+        title: "Maintenance updated",
+    },
+    RESTORED: { sentence: "restored", title: "Restored" },
+    STATUS_CHANGED: { sentence: "status changed", title: "Status changed" },
+    UNASSIGNED: { sentence: "unassigned", title: "Unassigned" },
+    UPDATED: { sentence: "updated", title: "Updated" },
+};
+
 function asString(value: unknown) {
     return typeof value === "string" && value.trim().length > 0
         ? value.trim()
@@ -49,6 +85,19 @@ function formatChangedFields(value: unknown) {
     return formatList(
         asStringArray(value).map((field) => FIELD_LABELS[field] ?? field)
     );
+}
+
+export function getActivityActionLabel(
+    action: string,
+    variant: "sentence" | "title" = "sentence"
+) {
+    const label = ACTION_LABELS[action]?.[variant];
+    if (label) return label;
+
+    const fallback = action.toLowerCase().replaceAll("_", " ");
+    return variant === "title"
+        ? `${fallback.charAt(0).toUpperCase()}${fallback.slice(1)}`
+        : fallback;
 }
 
 export function formatActivityDetails(

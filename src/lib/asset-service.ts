@@ -19,6 +19,12 @@ import {
     type MaintenanceScheduleInput,
     validate,
 } from "@/lib/validations";
+import {
+    assertAssetCreateStatusAllowed,
+    haveCustomFieldsChanged,
+    type AssetDirectStatus,
+    validateAndNormalizeCustomFields,
+} from "@/lib/asset-rules";
 
 type AssetServiceContext = Awaited<ReturnType<typeof requireTenantAccess>>;
 
@@ -133,39 +139,6 @@ function parseMaintenanceFormData(
     return result.data;
 }
 
-function isEmptyCustomFieldValue(value: unknown) {
-    return (
-        value === null ||
-        value === undefined ||
-        (typeof value === "string" && value.trim().length === 0)
-    );
-}
-
-function stableSerialize(value: unknown): string {
-    if (value === null || typeof value !== "object") {
-        return JSON.stringify(value);
-    }
-
-    if (Array.isArray(value)) {
-        return `[${value.map(stableSerialize).join(",")}]`;
-    }
-
-    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-        a.localeCompare(b)
-    );
-
-    return `{${entries
-        .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerialize(entryValue)}`)
-        .join(",")}}`;
-}
-
-export function haveCustomFieldsChanged(
-    previousFields: unknown,
-    nextFields: unknown
-) {
-    return stableSerialize(previousFields ?? {}) !== stableSerialize(nextFields ?? {});
-}
-
 export function buildAssetUpdateActivity(
     previousStatus: string,
     nextStatus: string,
@@ -192,112 +165,6 @@ export function buildAssetUpdateActivity(
             fields: fieldsWithoutStatus.length > 0 ? fieldsWithoutStatus : ["general"],
         },
     };
-}
-
-function normalizeCustomFieldValue(
-    field: CategoryFieldDefinition,
-    rawValue: unknown
-) {
-    switch (field.type) {
-        case "text":
-        case "textarea": {
-            if (typeof rawValue !== "string") {
-                throw new Error(`${field.label} must be text`);
-            }
-
-            return rawValue.trim();
-        }
-
-        case "number": {
-            if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
-                return rawValue;
-            }
-
-            if (typeof rawValue === "string") {
-                const trimmed = rawValue.trim();
-                const parsed = Number(trimmed);
-
-                if (trimmed.length > 0 && Number.isFinite(parsed)) {
-                    return parsed;
-                }
-            }
-
-            throw new Error(`${field.label} must be a number`);
-        }
-
-        case "select": {
-            if (typeof rawValue !== "string") {
-                throw new Error(`${field.label} must be text`);
-            }
-
-            const selected = rawValue.trim();
-            if (field.options?.length && !field.options.includes(selected)) {
-                throw new Error(
-                    `${field.label} must be one of: ${field.options.join(", ")}`
-                );
-            }
-
-            return selected;
-        }
-
-        case "date": {
-            if (typeof rawValue !== "string") {
-                throw new Error(`${field.label} must be a valid date`);
-            }
-
-            const trimmed = rawValue.trim();
-            if (Number.isNaN(Date.parse(trimmed))) {
-                throw new Error(`${field.label} must be a valid date`);
-            }
-
-            return trimmed;
-        }
-
-        case "boolean": {
-            if (typeof rawValue === "boolean") {
-                return rawValue;
-            }
-
-            if (typeof rawValue === "string") {
-                const normalized = rawValue.trim().toLowerCase();
-                if (normalized === "true") return true;
-                if (normalized === "false") return false;
-            }
-
-            throw new Error(`${field.label} must be true or false`);
-        }
-    }
-}
-
-export function validateAndNormalizeCustomFields(
-    customFields: Record<string, unknown> | null | undefined,
-    fieldSchema: CategoryFieldDefinition[]
-) {
-    if (!customFields) {
-        customFields = {};
-    }
-
-    if (typeof customFields !== "object" || Array.isArray(customFields)) {
-        throw new Error("Invalid custom fields format");
-    }
-
-    const normalizedFields: Record<string, unknown> = {};
-
-    for (const field of fieldSchema) {
-        const rawValue = customFields[field.key];
-
-        if (isEmptyCustomFieldValue(rawValue)) {
-            if (field.required) {
-                throw new Error(`${field.label} is required`);
-            }
-
-            continue;
-        }
-
-        normalizedFields[field.key] = normalizeCustomFieldValue(field, rawValue);
-    }
-
-    return normalizedFields;
 }
 
 async function requireAssetManagerContext(
@@ -429,14 +296,18 @@ function assertAssetCanBeUnassigned(asset: AssetAssignmentState) {
     }
 }
 
+export function isAssetArchived(asset: { archivedAt?: Date | null }) {
+    return Boolean(asset.archivedAt);
+}
+
 function assertAssetNotArchived(asset: { archivedAt: Date | null }) {
-    if (asset.archivedAt) {
+    if (isAssetArchived(asset)) {
         throw badRequest("Archived assets cannot be modified");
     }
 }
 
 function assertAssetIsArchived(asset: { archivedAt: Date | null }) {
-    if (!asset.archivedAt) {
+    if (!isAssetArchived(asset)) {
         throw badRequest("Asset is not archived");
     }
 }
@@ -600,9 +471,7 @@ export async function createAssetForTenant(
     const assetData = parseAssetFormData(formData);
     const maintenanceData = parseMaintenanceFormData(formData);
 
-    if (assetData.status === "ASSIGNED") {
-        throw new Error("Use the assign action after creating an asset");
-    }
+    assertAssetCreateStatusAllowed(assetData.status);
 
     return db.$transaction(async (tx) => {
         const category = await getCategoryForTenantOrThrow(
@@ -862,14 +731,6 @@ export async function archiveAssetWithContext(
 
     const archivedAt = new Date();
 
-    await client.asset.update({
-        where: { id: asset.id },
-        data: {
-            status: "RETIRED",
-            archivedAt,
-        },
-    });
-
     await maintenanceDeactivator(
         {
             assetIds: [asset.id],
@@ -881,6 +742,14 @@ export async function archiveAssetWithContext(
         },
         client
     );
+
+    await client.asset.update({
+        where: { id: asset.id },
+        data: {
+            status: "RETIRED",
+            archivedAt,
+        },
+    });
 
     await activityLogger(
         {
@@ -1034,7 +903,7 @@ export async function unassignAssetForTenant(
 export async function bulkUpdateAssetStatusForTenant(
     tenantSlug: string,
     assetIds: string[],
-    status: "AVAILABLE" | "MAINTENANCE" | "RETIRED"
+    status: AssetDirectStatus
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
     const uniqueAssetIds = dedupeAssetIds(assetIds);
@@ -1344,17 +1213,6 @@ export async function bulkDeleteAssetsForTenant(
         }
 
         const archivedAt = new Date();
-        const result = await tx.asset.updateMany({
-            where: {
-                id: { in: uniqueAssetIds },
-                tenantId: tenant.id,
-            },
-            data: {
-                status: "RETIRED",
-                archivedAt,
-            },
-        });
-
         await deactivateMaintenanceForAssets(
             {
                 assetIds: uniqueAssetIds,
@@ -1366,6 +1224,17 @@ export async function bulkDeleteAssetsForTenant(
             },
             tx
         );
+
+        const result = await tx.asset.updateMany({
+            where: {
+                id: { in: uniqueAssetIds },
+                tenantId: tenant.id,
+            },
+            data: {
+                status: "RETIRED",
+                archivedAt,
+            },
+        });
 
         await logBulkAssetActivity(
             "DELETED",

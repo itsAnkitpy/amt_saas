@@ -20,7 +20,7 @@ import {
     BanIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatActivityDetails } from '@/lib/activity-format';
+import { formatActivityDetails, getActivityActionLabel } from '@/lib/activity-format';
 
 interface Activity {
     id: string;
@@ -35,21 +35,21 @@ interface ActivityTimelineProps {
 }
 
 const actionConfig: Record<string, { icon: typeof PlusCircleIcon; label: string; color: string }> = {
-    CREATED: { icon: PlusCircleIcon, label: 'Created', color: 'text-green-600' },
-    UPDATED: { icon: PencilIcon, label: 'Updated', color: 'text-blue-600' },
-    ASSIGNED: { icon: UserPlusIcon, label: 'Assigned', color: 'text-violet-600' },
-    UNASSIGNED: { icon: UserMinusIcon, label: 'Unassigned', color: 'text-orange-600' },
-    STATUS_CHANGED: { icon: RefreshCwIcon, label: 'Status changed', color: 'text-yellow-600' },
-    DELETED: { icon: ArchiveIcon, label: 'Archived', color: 'text-orange-600' },
-    RESTORED: { icon: RotateCcwIcon, label: 'Restored', color: 'text-green-600' },
-    IMAGE_ADDED: { icon: ImagePlusIcon, label: 'Image added', color: 'text-blue-500' },
-    IMAGE_REMOVED: { icon: ImageMinusIcon, label: 'Image removed', color: 'text-zinc-500' },
-    MAINTENANCE_SCHEDULED: { icon: CalendarClockIcon, label: 'Maintenance scheduled', color: 'text-violet-600' },
-    MAINTENANCE_UPDATED: { icon: PencilIcon, label: 'Maintenance updated', color: 'text-blue-600' },
-    MAINTENANCE_DISABLED: { icon: BanIcon, label: 'Maintenance disabled', color: 'text-zinc-500' },
-    MAINTENANCE_STARTED: { icon: PlayCircleIcon, label: 'Maintenance started', color: 'text-amber-600' },
-    MAINTENANCE_COMPLETED: { icon: CircleCheckBigIcon, label: 'Maintenance completed', color: 'text-green-600' },
-    MAINTENANCE_CANCELLED: { icon: BanIcon, label: 'Maintenance cancelled', color: 'text-red-600' },
+    CREATED: { icon: PlusCircleIcon, label: getActivityActionLabel('CREATED'), color: 'text-green-600' },
+    UPDATED: { icon: PencilIcon, label: getActivityActionLabel('UPDATED'), color: 'text-blue-600' },
+    ASSIGNED: { icon: UserPlusIcon, label: getActivityActionLabel('ASSIGNED'), color: 'text-violet-600' },
+    UNASSIGNED: { icon: UserMinusIcon, label: getActivityActionLabel('UNASSIGNED'), color: 'text-orange-600' },
+    STATUS_CHANGED: { icon: RefreshCwIcon, label: getActivityActionLabel('STATUS_CHANGED'), color: 'text-yellow-600' },
+    DELETED: { icon: ArchiveIcon, label: getActivityActionLabel('DELETED'), color: 'text-orange-600' },
+    RESTORED: { icon: RotateCcwIcon, label: getActivityActionLabel('RESTORED'), color: 'text-green-600' },
+    IMAGE_ADDED: { icon: ImagePlusIcon, label: getActivityActionLabel('IMAGE_ADDED'), color: 'text-blue-500' },
+    IMAGE_REMOVED: { icon: ImageMinusIcon, label: getActivityActionLabel('IMAGE_REMOVED'), color: 'text-zinc-500' },
+    MAINTENANCE_SCHEDULED: { icon: CalendarClockIcon, label: getActivityActionLabel('MAINTENANCE_SCHEDULED'), color: 'text-violet-600' },
+    MAINTENANCE_UPDATED: { icon: PencilIcon, label: getActivityActionLabel('MAINTENANCE_UPDATED'), color: 'text-blue-600' },
+    MAINTENANCE_DISABLED: { icon: BanIcon, label: getActivityActionLabel('MAINTENANCE_DISABLED'), color: 'text-zinc-500' },
+    MAINTENANCE_STARTED: { icon: PlayCircleIcon, label: getActivityActionLabel('MAINTENANCE_STARTED'), color: 'text-amber-600' },
+    MAINTENANCE_COMPLETED: { icon: CircleCheckBigIcon, label: getActivityActionLabel('MAINTENANCE_COMPLETED'), color: 'text-green-600' },
+    MAINTENANCE_CANCELLED: { icon: BanIcon, label: getActivityActionLabel('MAINTENANCE_CANCELLED'), color: 'text-red-600' },
 };
 
 export function ActivityTimeline({ assetId, tenantSlug }: ActivityTimelineProps) {
@@ -138,7 +138,7 @@ export function ActivityTimeline({ assetId, tenantSlug }: ActivityTimelineProps)
                                         {details?.performedBy as string || 'System'}
                                     </span>
                                     {' '}
-                                    {config.label.toLowerCase()}
+                                    {config.label}
                                     {' '}
                                     <span className="text-muted-foreground">
                                         {formatActivityDetails(activity.action, details)}

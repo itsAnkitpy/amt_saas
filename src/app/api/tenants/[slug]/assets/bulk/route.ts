@@ -14,6 +14,7 @@ import {
     bulkUnassignAssetsForTenant,
     bulkUpdateAssetStatusForTenant,
 } from '@/lib/asset-service';
+import { ASSET_DIRECT_STATUSES, type AssetDirectStatus } from '@/lib/asset-rules';
 import { BulkActionSchema, validateBody } from '@/lib/validations';
 
 interface RouteParams {
@@ -21,9 +22,6 @@ interface RouteParams {
         slug: string;
     }>;
 }
-
-const VALID_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'RETIRED'] as const;
-type BulkStatusAction = (typeof VALID_STATUSES)[number];
 
 /**
  * POST /api/tenants/[slug]/assets/bulk
@@ -35,7 +33,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const { slug } = await params;
         const authResult = await checkTenantAccessForApi(slug);
 
-        if ('error' in authResult) {
+        if (!authResult.ok) {
             return NextResponse.json(
                 { error: authResult.error },
                 { status: authResult.status }
@@ -68,10 +66,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             case 'update_status':
                 if (
                     !data?.status ||
-                    !VALID_STATUSES.includes(data.status as BulkStatusAction)
+                    !ASSET_DIRECT_STATUSES.includes(data.status as AssetDirectStatus)
                 ) {
                     return NextResponse.json(
-                        { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` },
+                        { error: `Invalid status. Must be one of: ${ASSET_DIRECT_STATUSES.join(', ')}` },
                         { status: 400 }
                     );
                 }
@@ -79,7 +77,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 result = await bulkUpdateAssetStatusForTenant(
                     slug,
                     assetIds,
-                    data.status as BulkStatusAction
+                    data.status as AssetDirectStatus
                 );
                 break;
 
