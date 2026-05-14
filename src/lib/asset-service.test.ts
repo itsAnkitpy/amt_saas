@@ -8,6 +8,8 @@ const require = createRequire(import.meta.url);
 const {
     archiveAssetWithContext,
     assignAssetWithContext,
+    buildAssetUpdateActivity,
+    haveCustomFieldsChanged,
     restoreAssetWithContext,
     unassignAssetWithContext,
     validateAndNormalizeCustomFields,
@@ -337,6 +339,51 @@ test("validateAndNormalizeCustomFields rejects invalid boolean values", () => {
                 fieldSchema
             ),
         /Managed must be true or false/
+    );
+});
+
+test("haveCustomFieldsChanged ignores object key order", () => {
+    assert.equal(
+        haveCustomFieldsChanged(
+            {
+                seatCount: 25,
+                platform: "macOS",
+            },
+            {
+                platform: "macOS",
+                seatCount: 25,
+            }
+        ),
+        false
+    );
+});
+
+test("buildAssetUpdateActivity records readable status changes", () => {
+    assert.deepEqual(
+        buildAssetUpdateActivity("AVAILABLE", "RETIRED", [
+            "status",
+            "customFields",
+        ]),
+        {
+            action: "STATUS_CHANGED",
+            details: {
+                from: "AVAILABLE",
+                to: "RETIRED",
+                fields: ["customFields"],
+            },
+        }
+    );
+});
+
+test("buildAssetUpdateActivity keeps normal updates as updated events", () => {
+    assert.deepEqual(
+        buildAssetUpdateActivity("AVAILABLE", "AVAILABLE", ["customFields"]),
+        {
+            action: "UPDATED",
+            details: {
+                fields: ["customFields"],
+            },
+        }
     );
 });
 

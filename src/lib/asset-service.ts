@@ -141,6 +141,59 @@ function isEmptyCustomFieldValue(value: unknown) {
     );
 }
 
+function stableSerialize(value: unknown): string {
+    if (value === null || typeof value !== "object") {
+        return JSON.stringify(value);
+    }
+
+    if (Array.isArray(value)) {
+        return `[${value.map(stableSerialize).join(",")}]`;
+    }
+
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+        a.localeCompare(b)
+    );
+
+    return `{${entries
+        .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerialize(entryValue)}`)
+        .join(",")}}`;
+}
+
+export function haveCustomFieldsChanged(
+    previousFields: unknown,
+    nextFields: unknown
+) {
+    return stableSerialize(previousFields ?? {}) !== stableSerialize(nextFields ?? {});
+}
+
+export function buildAssetUpdateActivity(
+    previousStatus: string,
+    nextStatus: string,
+    changedFields: string[]
+) {
+    const fieldsWithoutStatus = changedFields.filter((field) => field !== "status");
+
+    if (previousStatus !== nextStatus) {
+        return {
+            action: "STATUS_CHANGED" as const,
+            details: {
+                from: previousStatus,
+                to: nextStatus,
+                ...(fieldsWithoutStatus.length > 0
+                    ? { fields: fieldsWithoutStatus }
+                    : {}),
+            },
+        };
+    }
+
+    return {
+        action: "UPDATED" as const,
+        details: {
+            fields: fieldsWithoutStatus.length > 0 ? fieldsWithoutStatus : ["general"],
+        },
+    };
+}
+
 function normalizeCustomFieldValue(
     field: CategoryFieldDefinition,
     rawValue: unknown
@@ -727,9 +780,12 @@ export async function updateAssetForTenant(
             changedFields.push("warrantyEnd");
         }
 
-        const previousCustomFields = JSON.stringify(existingAsset.customFields ?? {});
-        const nextCustomFields = JSON.stringify(normalizedCustomFields);
-        if (previousCustomFields !== nextCustomFields) {
+        if (
+            haveCustomFieldsChanged(
+                existingAsset.customFields,
+                normalizedCustomFields
+            )
+        ) {
             changedFields.push("customFields");
         }
 
@@ -751,16 +807,20 @@ export async function updateAssetForTenant(
             },
         });
 
+        const activity = buildAssetUpdateActivity(
+            existingAsset.status,
+            assetData.status,
+            changedFields
+        );
+
         await logAssetActivity(
             {
-                action: "UPDATED",
+                action: activity.action,
                 assetId: asset.id,
                 userId: user.id,
                 userName: getUserDisplayName(user),
                 tenantId: tenant.id,
-                details: {
-                    fields: changedFields.length > 0 ? changedFields : ["general"],
-                },
+                details: activity.details,
             },
             tx
         );

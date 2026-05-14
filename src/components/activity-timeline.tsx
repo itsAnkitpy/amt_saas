@@ -8,7 +8,7 @@ import {
     UserPlusIcon,
     UserMinusIcon,
     RefreshCwIcon,
-    TrashIcon,
+    ArchiveIcon,
     RotateCcwIcon,
     ImagePlusIcon,
     ImageMinusIcon,
@@ -20,6 +20,7 @@ import {
     BanIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatActivityDetails } from '@/lib/activity-format';
 
 interface Activity {
     id: string;
@@ -39,7 +40,7 @@ const actionConfig: Record<string, { icon: typeof PlusCircleIcon; label: string;
     ASSIGNED: { icon: UserPlusIcon, label: 'Assigned', color: 'text-violet-600' },
     UNASSIGNED: { icon: UserMinusIcon, label: 'Unassigned', color: 'text-orange-600' },
     STATUS_CHANGED: { icon: RefreshCwIcon, label: 'Status changed', color: 'text-yellow-600' },
-    DELETED: { icon: TrashIcon, label: 'Deleted', color: 'text-red-600' },
+    DELETED: { icon: ArchiveIcon, label: 'Archived', color: 'text-orange-600' },
     RESTORED: { icon: RotateCcwIcon, label: 'Restored', color: 'text-green-600' },
     IMAGE_ADDED: { icon: ImagePlusIcon, label: 'Image added', color: 'text-blue-500' },
     IMAGE_REMOVED: { icon: ImageMinusIcon, label: 'Image removed', color: 'text-zinc-500' },
@@ -96,44 +97,6 @@ export function ActivityTimeline({ assetId, tenantSlug }: ActivityTimelineProps)
         fetchActivities(nextPage);
     };
 
-    const formatDetails = (action: string, details: Record<string, unknown> | null) => {
-        if (!details) return '';
-
-        switch (action) {
-            case 'ASSIGNED':
-                return `to ${details.assignedTo}`;
-            case 'UNASSIGNED':
-                return details.previousAssignee ? `from ${details.previousAssignee}` : '';
-            case 'STATUS_CHANGED':
-                return details.to ? `to ${details.to}` : '';
-            case 'UPDATED':
-                return details.fields ? `(${(details.fields as string[]).join(', ')})` : '';
-            case 'IMAGE_ADDED':
-            case 'IMAGE_REMOVED':
-                return details.fileName as string;
-            case 'CREATED':
-                return details.category ? `in ${details.category}` : '';
-            case 'MAINTENANCE_SCHEDULED':
-            case 'MAINTENANCE_UPDATED':
-                return details.intervalLabel
-                    ? `(${details.intervalLabel}${details.dueAt ? `, next due ${new Date(details.dueAt as string).toLocaleDateString()}` : ''})`
-                    : '';
-            case 'MAINTENANCE_DISABLED':
-            case 'MAINTENANCE_CANCELLED':
-                return details.reason ? `(${details.reason})` : '';
-            case 'MAINTENANCE_STARTED':
-                return details.dueAt
-                    ? `(due ${new Date(details.dueAt as string).toLocaleDateString()})`
-                    : '';
-            case 'MAINTENANCE_COMPLETED':
-                return details.nextDueAt
-                    ? `(next due ${new Date(details.nextDueAt as string).toLocaleDateString()})`
-                    : '';
-            default:
-                return '';
-        }
-    };
-
     if (isLoading && activities.length === 0) {
         return (
             <div className="flex items-center justify-center py-8">
@@ -178,7 +141,7 @@ export function ActivityTimeline({ assetId, tenantSlug }: ActivityTimelineProps)
                                     {config.label.toLowerCase()}
                                     {' '}
                                     <span className="text-muted-foreground">
-                                        {formatDetails(activity.action, details)}
+                                        {formatActivityDetails(activity.action, details)}
                                     </span>
                                 </p>
                                 <p className="text-xs text-muted-foreground">

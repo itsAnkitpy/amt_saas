@@ -41,10 +41,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/PRD
+# /PRD
+/graphify-out
 
 /src/generated/prisma
 
 # storage (uploaded files)
 /storage/uploads/*
 !/storage/uploads/.gitkeep
+

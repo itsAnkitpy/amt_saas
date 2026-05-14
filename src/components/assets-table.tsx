@@ -44,7 +44,6 @@ import {
     UploadIcon,
     UserPlusIcon,
     UserMinusIcon,
-    TrashIcon
 } from 'lucide-react';
 import {
     Dialog,
@@ -246,8 +245,9 @@ export function AssetsTable({
         });
     };
 
-    // Request delete confirmation
-    const requestDelete = () => {
+    // Request archive confirmation. The API action is still named "delete" because
+    // the backend treats delete as soft-delete/archive.
+    const requestArchive = () => {
         setPendingAction({
             action: 'delete',
             title: 'Archive Assets',
@@ -514,13 +514,14 @@ export function AssetsTable({
 
                             {canManageActiveAssets && (
                                 <Button
-                                    variant="destructive"
+                                    variant="outline"
                                     size="sm"
                                     disabled={isLoading}
-                                    onClick={requestDelete}
+                                    onClick={requestArchive}
+                                    className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800 dark:border-orange-900 dark:text-orange-300 dark:hover:bg-orange-950"
                                 >
-                                    <TrashIcon className="mr-2 h-4 w-4" />
-                                    Delete
+                                    <ArchiveIcon className="mr-2 h-4 w-4" />
+                                    Archive
                                 </Button>
                             )}
 

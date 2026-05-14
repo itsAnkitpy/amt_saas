@@ -1,7 +1,7 @@
 import {
     PlusCircle,
     Pencil,
-    Trash2,
+    Archive,
     UserPlus,
     UserMinus,
     RefreshCw,
@@ -17,12 +17,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import { formatActivityDetails } from '@/lib/activity-format';
 
 // Activity action icons and colors - matching existing activity-timeline.tsx
 const ACTION_CONFIG: Record<string, { icon: LucideIcon; color: string; label: string }> = {
     CREATED: { icon: PlusCircle, color: 'text-green-600', label: 'created' },
     UPDATED: { icon: Pencil, color: 'text-blue-600', label: 'updated' },
-    DELETED: { icon: Trash2, color: 'text-red-600', label: 'deleted' },
+    DELETED: { icon: Archive, color: 'text-orange-600', label: 'archived' },
     RESTORED: { icon: RotateCcw, color: 'text-green-600', label: 'restored' },
     ASSIGNED: { icon: UserPlus, color: 'text-violet-600', label: 'assigned' },
     UNASSIGNED: { icon: UserMinus, color: 'text-orange-600', label: 'unassigned' },
@@ -51,47 +52,6 @@ interface Activity {
 interface RecentActivityProps {
     activities: Activity[];
     tenantSlug: string;
-}
-
-/**
- * Format additional details based on action type
- */
-function formatDetails(action: string, details: Record<string, unknown> | null): string {
-    if (!details) return '';
-
-    switch (action) {
-        case 'ASSIGNED':
-            return details.assignedTo ? `to ${details.assignedTo}` : '';
-        case 'UNASSIGNED':
-            return details.previousAssignee ? `from ${details.previousAssignee}` : '';
-        case 'STATUS_CHANGED':
-            return details.to ? `to ${details.to}` : '';
-        case 'UPDATED':
-            return details.fields ? `(${(details.fields as string[]).join(', ')})` : '';
-        case 'IMAGE_ADDED':
-        case 'IMAGE_REMOVED':
-            return details.fileName as string || '';
-        case 'CREATED':
-            return details.category ? `in ${details.category}` : '';
-        case 'MAINTENANCE_SCHEDULED':
-        case 'MAINTENANCE_UPDATED':
-            return details.intervalLabel
-                ? `(${details.intervalLabel})`
-                : '';
-        case 'MAINTENANCE_DISABLED':
-        case 'MAINTENANCE_CANCELLED':
-            return details.reason ? `(${details.reason})` : '';
-        case 'MAINTENANCE_STARTED':
-            return details.dueAt
-                ? `due ${new Date(details.dueAt as string).toLocaleDateString()}`
-                : '';
-        case 'MAINTENANCE_COMPLETED':
-            return details.nextDueAt
-                ? `next due ${new Date(details.nextDueAt as string).toLocaleDateString()}`
-                : '';
-        default:
-            return '';
-    }
 }
 
 /**
@@ -132,7 +92,7 @@ export function RecentActivity({ activities, tenantSlug }: RecentActivityProps) 
                     const details = activity.details as Record<string, unknown> | null;
                     // Use performedBy from details (matching existing activity-timeline)
                     const performedBy = (details?.performedBy as string) || 'System';
-                    const additionalInfo = formatDetails(activity.action, details);
+                    const additionalInfo = formatActivityDetails(activity.action, details);
 
                     return (
                         <div key={activity.id} className="flex gap-3">

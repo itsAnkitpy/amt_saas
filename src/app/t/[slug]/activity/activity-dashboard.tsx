@@ -9,7 +9,7 @@ import {
     UserPlusIcon,
     UserMinusIcon,
     RefreshCwIcon,
-    TrashIcon,
+    ArchiveIcon,
     RotateCcwIcon,
     ImagePlusIcon,
     ImageMinusIcon,
@@ -22,6 +22,7 @@ import {
     BanIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatActivityDetails } from '@/lib/activity-format';
 import {
     Select,
     SelectContent,
@@ -52,7 +53,7 @@ const actionConfig: Record<string, { icon: typeof PlusCircleIcon; label: string;
     ASSIGNED: { icon: UserPlusIcon, label: 'Assigned', color: 'text-violet-600' },
     UNASSIGNED: { icon: UserMinusIcon, label: 'Unassigned', color: 'text-orange-600' },
     STATUS_CHANGED: { icon: RefreshCwIcon, label: 'Status changed', color: 'text-yellow-600' },
-    DELETED: { icon: TrashIcon, label: 'Deleted', color: 'text-red-600' },
+    DELETED: { icon: ArchiveIcon, label: 'Archived', color: 'text-orange-600' },
     RESTORED: { icon: RotateCcwIcon, label: 'Restored', color: 'text-green-600' },
     IMAGE_ADDED: { icon: ImagePlusIcon, label: 'Image added', color: 'text-blue-500' },
     IMAGE_REMOVED: { icon: ImageMinusIcon, label: 'Image removed', color: 'text-zinc-500' },
@@ -71,7 +72,7 @@ const actionTypes = [
     { value: 'ASSIGNED', label: 'Assigned' },
     { value: 'UNASSIGNED', label: 'Unassigned' },
     { value: 'STATUS_CHANGED', label: 'Status Changed' },
-    { value: 'DELETED', label: 'Deleted' },
+    { value: 'DELETED', label: 'Archived' },
     { value: 'RESTORED', label: 'Restored' },
     { value: 'IMAGE_ADDED', label: 'Image Added' },
     { value: 'IMAGE_REMOVED', label: 'Image Removed' },
@@ -122,44 +123,6 @@ export function ActivityDashboard({ tenantSlug }: ActivityDashboardProps) {
     const handleFilterChange = (value: string) => {
         setActionFilter(value);
         setPage(1); // Reset to first page when filter changes
-    };
-
-    const formatDetails = (action: string, details: Record<string, unknown> | null) => {
-        if (!details) return '';
-
-        switch (action) {
-            case 'ASSIGNED':
-                return `to ${details.assignedTo}`;
-            case 'UNASSIGNED':
-                return details.previousAssignee ? `from ${details.previousAssignee}` : '';
-            case 'STATUS_CHANGED':
-                return details.to ? `to ${details.to}` : '';
-            case 'UPDATED':
-                return details.fields ? `(${(details.fields as string[]).join(', ')})` : '';
-            case 'IMAGE_ADDED':
-            case 'IMAGE_REMOVED':
-                return details.fileName as string;
-            case 'CREATED':
-                return details.category ? `in ${details.category}` : '';
-            case 'MAINTENANCE_SCHEDULED':
-            case 'MAINTENANCE_UPDATED':
-                return details.intervalLabel
-                    ? `(${details.intervalLabel})`
-                    : '';
-            case 'MAINTENANCE_DISABLED':
-            case 'MAINTENANCE_CANCELLED':
-                return details.reason ? `(${details.reason})` : '';
-            case 'MAINTENANCE_STARTED':
-                return details.dueAt
-                    ? `(due ${new Date(details.dueAt as string).toLocaleDateString()})`
-                    : '';
-            case 'MAINTENANCE_COMPLETED':
-                return details.nextDueAt
-                    ? `(next due ${new Date(details.nextDueAt as string).toLocaleDateString()})`
-                    : '';
-            default:
-                return '';
-        }
     };
 
     if (error && activities.length === 0) {
@@ -229,7 +192,7 @@ export function ActivityDashboard({ tenantSlug }: ActivityDashboardProps) {
                                             </Link>
                                             {' '}
                                             <span className="text-muted-foreground">
-                                                {formatDetails(activity.action, details)}
+                                                {formatActivityDetails(activity.action, details)}
                                             </span>
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-0.5">
