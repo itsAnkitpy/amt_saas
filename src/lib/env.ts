@@ -18,6 +18,10 @@ const EnvSchema = z.object({
     // Storage (optional - falls back to local storage)
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
+    // Cron — used by /api/cron/notifications/daily bearer auth.
+    // Vercel Cron injects this same value as `Authorization: Bearer <secret>`.
+    CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 chars'),
+
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });

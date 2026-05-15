@@ -6,6 +6,8 @@ import {
 } from "@/generated/prisma";
 import { db } from "@/lib/db";
 
+type RecipientResolverClient = Pick<typeof db, "user">;
+
 /**
  * Notification write authority + inbox reads.
  *
@@ -103,6 +105,67 @@ export function computeVisibilityFlags(pref: EffectivePreference): VisibilityFla
 }
 
 // ============================================
+// Recipient resolution
+// ============================================
+
+/**
+ * Minimal source shape consumed by `resolveRecipientsForType`.
+ * Callers (cron scans, assignment emit) pass what they have.
+ */
+export type RecipientSource = {
+    tenantId: string;
+    /** Current asset assignee, if any. Used only by OVERDUE and ASSIGNED_TO_YOU. */
+    assigneeId?: string | null;
+};
+
+/**
+ * Returns the recipient userIds for a given event type per PRD §5.
+ *
+ *   OVERDUE              -> ADMIN+MANAGER tenant-wide ∪ assignee (if any)
+ *   DUE_SOON             -> ADMIN+MANAGER tenant-wide
+ *   WARRANTY_EXPIRING    -> ADMIN+MANAGER tenant-wide
+ *   ASSIGNED_TO_YOU      -> assignee only
+ *
+ * Always excludes `isActive=false` users. Tenant-active filtering is the
+ * scan's responsibility (applied at the source query for efficiency).
+ */
+export async function resolveRecipientsForType(
+    type: NotificationType,
+    source: RecipientSource,
+    client: RecipientResolverClient = db,
+): Promise<string[]> {
+    if (type === "ASSET_ASSIGNED_TO_YOU") {
+        if (!source.assigneeId) return [];
+        const assignee = await client.user.findFirst({
+            where: {
+                id: source.assigneeId,
+                tenantId: source.tenantId,
+                isActive: true,
+            },
+            select: { id: true },
+        });
+        return assignee ? [assignee.id] : [];
+    }
+
+    const includeAssignee =
+        type === "MAINTENANCE_OVERDUE" && !!source.assigneeId;
+
+    const users = await client.user.findMany({
+        where: {
+            tenantId: source.tenantId,
+            isActive: true,
+            OR: [
+                { role: { in: ["ADMIN", "MANAGER"] } },
+                ...(includeAssignee ? [{ id: source.assigneeId! }] : []),
+            ],
+        },
+        select: { id: true },
+    });
+
+    return users.map((u) => u.id);
+}
+
+// ============================================
 // Preference resolution
 // ============================================
 
@@ -170,7 +233,10 @@ export async function createNotification(
         });
         return { created: 1, skipped: 0 };
     } catch (err) {
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        // Duck-type the Prisma error code: in Next.js server bundles,
+        // `instanceof Prisma.PrismaClientKnownRequestError` can fail across
+        // module realms even when the runtime error is a P2002.
+        if ((err as { code?: unknown } | null | undefined)?.code === "P2002") {
             // Dedupe collision — expected; not an error.
             return { created: 0, skipped: 1 };
         }
