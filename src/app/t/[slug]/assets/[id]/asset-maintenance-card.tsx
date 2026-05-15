@@ -2,8 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import {
+    BanIcon,
     CalendarClockIcon,
+    CheckCircle2Icon,
+    Clock3Icon,
     Loader2Icon,
+    PlayCircleIcon,
     Settings2Icon,
     ShieldAlertIcon,
 } from "lucide-react";
@@ -69,6 +73,87 @@ function formatDate(value: string | null) {
     return new Date(value).toLocaleDateString();
 }
 
+function formatDueDistance(value: string) {
+    const dueDate = new Date(value);
+    const today = new Date();
+    dueDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const dayDiff = Math.round(
+        (dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (dayDiff < 0) {
+        const days = Math.abs(dayDiff);
+        return `${days} day${days === 1 ? "" : "s"} overdue`;
+    }
+
+    if (dayDiff === 0) return "Due today";
+    if (dayDiff === 1) return "Due tomorrow";
+
+    return `Due in ${dayDiff} days`;
+}
+
+function getJobState(job: MaintenanceJob | null, attentionState: "overdue" | "dueSoon" | "none") {
+    if (!job) {
+        return {
+            label: "No active work",
+            description: "Nothing is waiting right now.",
+            icon: CheckCircle2Icon,
+            badgeClass:
+                "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300",
+            panelClass:
+                "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/40 dark:bg-emerald-950/10",
+        };
+    }
+
+    if (job.status === "IN_PROGRESS") {
+        return {
+            label: "In progress",
+            description: `Started ${formatDate(job.startedAt)}.`,
+            icon: PlayCircleIcon,
+            badgeClass:
+                "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300",
+            panelClass:
+                "border-blue-200 bg-blue-50/70 dark:border-blue-900/40 dark:bg-blue-950/10",
+        };
+    }
+
+    if (attentionState === "overdue") {
+        return {
+            label: "Overdue",
+            description: formatDueDistance(job.dueAt),
+            icon: ShieldAlertIcon,
+            badgeClass:
+                "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300",
+            panelClass:
+                "border-red-200 bg-red-50/70 dark:border-red-900/40 dark:bg-red-950/10",
+        };
+    }
+
+    if (attentionState === "dueSoon") {
+        return {
+            label: "Due soon",
+            description: formatDueDistance(job.dueAt),
+            icon: Clock3Icon,
+            badgeClass:
+                "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300",
+            panelClass:
+                "border-amber-200 bg-amber-50/70 dark:border-amber-900/40 dark:bg-amber-950/10",
+        };
+    }
+
+    return {
+        label: "Open",
+        description: formatDueDistance(job.dueAt),
+        icon: CalendarClockIcon,
+        badgeClass:
+            "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300",
+        panelClass:
+            "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950",
+    };
+}
+
 export function AssetMaintenanceCard({
     tenantSlug,
     assetId,
@@ -106,6 +191,8 @@ export function AssetMaintenanceCard({
     const [instructions, setInstructions] = useState(
         schedule?.instructions ?? ""
     );
+    const jobState = getJobState(currentJob, attentionState);
+    const JobStateIcon = jobState.icon;
 
     const handleSave = () => {
         startTransition(async () => {
@@ -154,9 +241,13 @@ export function AssetMaintenanceCard({
                     </p>
                 </div>
 
-                {schedule ? (
-                    <Badge variant={schedule.isActive ? "default" : "outline"}>
-                        {schedule.isActive ? "Active schedule" : "Disabled schedule"}
+                {isArchived ? (
+                    <Badge className="border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                        Archived
+                    </Badge>
+                ) : schedule ? (
+                    <Badge className={schedule.isActive ? jobState.badgeClass : "border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"}>
+                        {schedule.isActive ? jobState.label : "Disabled schedule"}
                     </Badge>
                 ) : (
                     <Badge variant="outline">Not configured</Badge>
@@ -178,25 +269,30 @@ export function AssetMaintenanceCard({
                     </p>
                 </div>
 
-                <div className="rounded-lg border border-dashed p-4">
+                <div className={`rounded-lg border p-4 ${currentJob ? jobState.panelClass : "border-dashed"}`}>
                     <p className="text-xs uppercase tracking-wide text-zinc-500">
                         Next Due
                     </p>
                     <p className="mt-2 font-medium">
                         {currentJob ? formatDate(currentJob.dueAt) : "No open job"}
                     </p>
+                    {currentJob && (
+                        <p className="mt-1 text-sm text-zinc-500">
+                            {formatDueDistance(currentJob.dueAt)}
+                        </p>
+                    )}
                 </div>
 
-                <div className="rounded-lg border border-dashed p-4">
+                <div className={`rounded-lg border p-4 ${jobState.panelClass}`}>
                     <p className="text-xs uppercase tracking-wide text-zinc-500">
                         Current Job
                     </p>
-                    <p className="mt-2 font-medium">
-                        {currentJob
-                            ? currentJob.status === "IN_PROGRESS"
-                                ? "In progress"
-                                : "Open"
-                            : "No active work"}
+                    <div className="mt-2 flex items-center gap-2">
+                        <JobStateIcon className="h-4 w-4" />
+                        <p className="font-medium">{jobState.label}</p>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-500">
+                        {jobState.description}
                     </p>
                 </div>
             </div>
@@ -227,10 +323,15 @@ export function AssetMaintenanceCard({
             )}
 
             {currentJob && (
-                <div className="mt-4 rounded-lg border p-4">
+                <div className={`mt-4 rounded-lg border p-4 ${jobState.panelClass}`}>
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                            <p className="font-medium">Current maintenance job</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium">Current maintenance job</p>
+                                <Badge className={jobState.badgeClass}>
+                                    {jobState.label}
+                                </Badge>
+                            </div>
                             <p className="mt-1 text-sm text-zinc-500">
                                 Due {formatDate(currentJob.dueAt)}
                                 {currentJob.startedAt &&
@@ -243,6 +344,25 @@ export function AssetMaintenanceCard({
                             job={currentJob}
                             canManage={canManageMaintenance && !isArchived}
                         />
+                    </div>
+                </div>
+            )}
+
+            {!schedule && !isArchived && (
+                <div className="mt-4 rounded-lg border border-dashed bg-zinc-50 p-4 text-sm text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300">
+                    No recurring maintenance is set up yet. Add an interval and a
+                    first due date to create the first job.
+                </div>
+            )}
+
+            {schedule && !schedule.isActive && !isArchived && (
+                <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                    <div className="flex items-start gap-2">
+                        <BanIcon className="mt-0.5 h-4 w-4" />
+                        <p>
+                            This schedule is disabled. Saving the form below will
+                            reactivate it and create a fresh open job.
+                        </p>
                     </div>
                 </div>
             )}
@@ -298,7 +418,7 @@ export function AssetMaintenanceCard({
 
                         <div className="space-y-1">
                             <Label htmlFor="maintenance-first-due-at">
-                                First or next due date
+                                {schedule ? "Next due date" : "First due date"}
                             </Label>
                             <Input
                                 id="maintenance-first-due-at"
@@ -378,15 +498,32 @@ export function AssetMaintenanceCard({
                         {historyJobs.map((job) => (
                             <div
                                 key={job.id}
-                                className="rounded-lg border border-dashed p-4"
+                                className={
+                                    job.status === "COMPLETED"
+                                        ? "rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/40 dark:bg-emerald-950/10"
+                                        : "rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                                }
                             >
                                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                     <div>
-                                        <p className="font-medium">
-                                            {job.status === "COMPLETED"
-                                                ? "Completed"
-                                                : "Cancelled"}
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium">
+                                                {job.status === "COMPLETED"
+                                                    ? "Completed"
+                                                    : "Cancelled"}
+                                            </p>
+                                            <Badge
+                                                className={
+                                                    job.status === "COMPLETED"
+                                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300"
+                                                        : "border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+                                                }
+                                            >
+                                                {job.status === "COMPLETED"
+                                                    ? "Done"
+                                                    : "Stopped"}
+                                            </Badge>
+                                        </div>
                                         <p className="mt-1 text-sm text-zinc-500">
                                             Due {formatDate(job.dueAt)}
                                             {job.completedAt &&
