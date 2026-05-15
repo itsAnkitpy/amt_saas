@@ -11,6 +11,7 @@ import {
     createMaintenanceScheduleWithFirstJob,
     deactivateMaintenanceForAssets,
 } from "@/lib/maintenance";
+import { safeCreateNotification } from "@/lib/notification-service";
 import {
     CreateAssetSchema,
     MaintenanceScheduleInputSchema,
@@ -332,6 +333,7 @@ export async function assignAssetWithContext(
         },
         select: {
             id: true,
+            name: true,
             status: true,
             assignedToId: true,
             archivedAt: true,
@@ -350,7 +352,7 @@ export async function assignAssetWithContext(
         params.tenantId
     );
 
-    await client.assetAssignment.create({
+    const assignment = await client.assetAssignment.create({
         data: {
             assetId: asset.id,
             userId: assignee.id,
@@ -380,7 +382,12 @@ export async function assignAssetWithContext(
         client
     );
 
-    return asset;
+    return {
+        asset,
+        assignmentId: assignment.id,
+        assigneeId: assignee.id,
+        assigneeName: getUserDisplayName(assignee),
+    };
 }
 
 export async function unassignAssetWithContext(
@@ -866,7 +873,7 @@ export async function assignAssetForTenant(
 ) {
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
 
-    return db.$transaction((tx) =>
+    const result = await db.$transaction((tx) =>
         assignAssetWithContext(
             {
                 assetId,
@@ -878,6 +885,24 @@ export async function assignAssetForTenant(
             tx
         )
     );
+
+    // Emit notification AFTER transaction commits so failures cannot roll back the assignment.
+    await safeCreateNotification({
+        tenantId: tenant.id,
+        userId: result.assigneeId,
+        type: "ASSET_ASSIGNED_TO_YOU",
+        sourceType: "ASSET_ASSIGNMENT",
+        sourceId: result.assignmentId,
+        title: "You've been assigned an asset",
+        body: `${result.asset.name} has been assigned to you.`,
+        payload: {
+            assetId: result.asset.id,
+            assetName: result.asset.name,
+            assignmentId: result.assignmentId,
+        },
+    });
+
+    return result;
 }
 
 export async function unassignAssetForTenant(
@@ -974,7 +999,7 @@ export async function bulkAssignAssetsForTenant(
     const { tenant, user } = await requireAssetManagerContext(tenantSlug);
     const uniqueAssetIds = dedupeAssetIds(assetIds);
 
-    return db.$transaction(async (tx) => {
+    const txResult = await db.$transaction(async (tx) => {
         const assets = await tx.asset.findMany({
             where: {
                 id: { in: uniqueAssetIds },
@@ -982,6 +1007,7 @@ export async function bulkAssignAssetsForTenant(
             },
             select: {
                 id: true,
+                name: true,
                 status: true,
                 assignedToId: true,
                 archivedAt: true,
@@ -1029,12 +1055,15 @@ export async function bulkAssignAssetsForTenant(
         );
         const assignmentNotes = notes?.trim() || null;
 
-        await tx.assetAssignment.createMany({
+        // createManyAndReturn (Postgres + Prisma 6) so we can emit a
+        // notification per new assignment row after the transaction commits.
+        const newAssignments = await tx.assetAssignment.createManyAndReturn({
             data: uniqueAssetIds.map((assetId) => ({
                 assetId,
                 userId: assignee.id,
                 notes: assignmentNotes,
             })),
+            select: { id: true, assetId: true },
         });
 
         const result = await tx.asset.updateMany({
@@ -1060,8 +1089,34 @@ export async function bulkAssignAssetsForTenant(
             tx
         );
 
-        return { count: result.count };
+        return {
+            count: result.count,
+            assigneeId: assignee.id,
+            newAssignments,
+            assetNamesById: new Map(assets.map((a) => [a.id, a.name])),
+        };
     });
+
+    // Emit notifications AFTER transaction commits — failures cannot roll back the assignment.
+    for (const a of txResult.newAssignments) {
+        const assetName = txResult.assetNamesById.get(a.assetId) ?? "An asset";
+        await safeCreateNotification({
+            tenantId: tenant.id,
+            userId: txResult.assigneeId,
+            type: "ASSET_ASSIGNED_TO_YOU",
+            sourceType: "ASSET_ASSIGNMENT",
+            sourceId: a.id,
+            title: "You've been assigned an asset",
+            body: `${assetName} has been assigned to you.`,
+            payload: {
+                assetId: a.assetId,
+                assetName,
+                assignmentId: a.id,
+            },
+        });
+    }
+
+    return { count: txResult.count };
 }
 
 export async function bulkUnassignAssetsForTenant(

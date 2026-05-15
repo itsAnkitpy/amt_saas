@@ -2,6 +2,10 @@ import { requireTenantAccess } from "@/lib/auth";
 import { ClientUserButton } from "@/components/client-user-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppSidebar } from "@/components/app-sidebar";
+import {
+    NotificationBell,
+    type BellPreview,
+} from "@/components/notifications/notification-bell";
 import { Toaster } from "@/components/ui/sonner";
 import {
     SidebarProvider,
@@ -9,6 +13,10 @@ import {
     SidebarInset,
 } from "@/components/ui/sidebar";
 import { getTenantMaintenanceAttentionSummary } from "@/lib/maintenance";
+import {
+    getUnreadCount,
+    listNotificationsForUser,
+} from "@/lib/notification-service";
 
 interface TenantLayoutProps {
     children: React.ReactNode;
@@ -31,9 +39,21 @@ export default async function TenantLayout({
     const { user, tenant } = await requireTenantAccess(slug);
 
     const isAdmin = user.role === "ADMIN" || user.isSuperAdmin;
-    const maintenanceAttention = await getTenantMaintenanceAttentionSummary(
-        tenant.id
-    );
+    const [maintenanceAttention, unreadCount, bellPage] = await Promise.all([
+        getTenantMaintenanceAttentionSummary(tenant.id),
+        getUnreadCount(user.id, tenant.id),
+        listNotificationsForUser(user.id, tenant.id, {
+            unreadOnly: true,
+            limit: 5,
+        }),
+    ]);
+    const bellPreviews: BellPreview[] = bellPage.items.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        createdAt: n.createdAt,
+    }));
 
     return (
         <SidebarProvider>
@@ -61,6 +81,11 @@ export default async function TenantLayout({
                         <span className="text-sm text-muted-foreground">
                             {user.firstName} ({user.role})
                         </span>
+                        <NotificationBell
+                            slug={slug}
+                            unreadCount={unreadCount}
+                            previews={bellPreviews}
+                        />
                         <ThemeToggle />
                         <ClientUserButton />
                     </div>

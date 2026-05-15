@@ -25,10 +25,12 @@ model Tenant {
   updatedAt DateTime @updatedAt
 
   // Relations
-  users           User[]
-  assets          Asset[]
-  assetCategories AssetCategory[]
-  departments     Department[]
+  users                   User[]
+  assets                  Asset[]
+  assetCategories         AssetCategory[]
+  departments             Department[]
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
 
   @@map("tenants")
 }
@@ -45,27 +47,30 @@ enum Plan {
 // ============================================
 
 model User {
-  id            String   @id @default(cuid())
-  email         String
-  firstName     String
-  lastName      String?
-  role          Role     @default(USER)
-  isSuperAdmin  Boolean  @default(false)  // NEW: Quick check for admin access
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String
+  firstName    String
+  lastName     String?
+  role         Role     @default(USER)
+  isSuperAdmin Boolean  @default(false) // NEW: Quick check for admin access
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Tenant relation (optional for superadmin)
-  tenantId      String?  // CHANGED: Nullable for superadmin users
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String? // CHANGED: Nullable for superadmin users
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Department relation (optional)
-  departmentId  String?
-  department    Department? @relation(fields: [departmentId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
 
   // Assets assigned to user
   assets           Asset[]
   assetAssignments AssetAssignment[]
+
+  // Notification preferences (FK + cascade; prefs are config, not audit)
+  notificationPreferences NotificationPreference[]
 
   // Email unique per tenant (null tenantId = superadmin, unique email)
   @@unique([email, tenantId])
@@ -92,11 +97,11 @@ model Department {
   updatedAt DateTime @updatedAt
 
   // Tenant relation
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Relations
-  users     User[]
+  users User[]
 
   @@unique([name, tenantId])
   @@index([tenantId])
@@ -109,28 +114,28 @@ model Department {
 
 // Asset Category with custom field schema
 model AssetCategory {
-  id                              String   @id @default(cuid())
+  id                              String                   @id @default(cuid())
   name                            String
   description                     String?
-  icon                            String?  // Lucide icon name (e.g., "laptop", "monitor")
+  icon                            String? // Lucide icon name (e.g., "laptop", "monitor")
   defaultMaintenanceIntervalValue Int?
   defaultMaintenanceIntervalUnit  MaintenanceIntervalUnit?
   defaultMaintenanceInstructions  String?
 
   // Custom field schema - JSON array defining fields for assets in this category
   // Example: [{"key": "processor", "label": "Processor", "type": "text", "required": true}]
-  fieldSchema Json     @default("[]")
+  fieldSchema Json @default("[]")
 
-  isActive                        Boolean  @default(true)
-  createdAt                       DateTime @default(now())
-  updatedAt                       DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Tenant relation
-  tenantId                        String
-  tenant                          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Assets in this category
-  assets                          Asset[]
+  assets Asset[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -139,61 +144,61 @@ model AssetCategory {
 
 // Asset with custom fields support
 model Asset {
-  id            String         @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Core fields (always present)
-  name          String
-  serialNumber  String?
-  assetTag      String?        // Internal tag like "IT-0001"
-  
+  name         String
+  serialNumber String?
+  assetTag     String? // Internal tag like "IT-0001"
+
   // Category relation
-  categoryId    String
-  category      AssetCategory  @relation(fields: [categoryId], references: [id])
-  
+  categoryId String
+  category   AssetCategory @relation(fields: [categoryId], references: [id])
+
   // Custom field values - JSON object matching category's fieldSchema
   // Example: {"processor": "Intel i7", "ram": "16GB", "storage": "512GB SSD"}
-  customFields  Json           @default("{}")
-  
+  customFields Json @default("{}")
+
   // Status
-  status        AssetStatus    @default(AVAILABLE)
-  condition     AssetCondition @default(GOOD)
-  
+  status    AssetStatus    @default(AVAILABLE)
+  condition AssetCondition @default(GOOD)
+
   // Location
-  location      String?
-  
+  location String?
+
   // Financial
-  purchasePrice Decimal?       @db.Decimal(10, 2)
+  purchasePrice Decimal?  @db.Decimal(10, 2)
   purchaseDate  DateTime?
   warrantyEnd   DateTime?
-  
+
   // Notes
-  notes         String?
-  
+  notes String?
+
   // Metadata
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  archivedAt    DateTime?      // Set when asset is soft-deleted (RETIRED)
-  
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime? // Set when asset is soft-deleted (RETIRED)
+
   // Tenant relation
-  tenantId      String
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   // Current assignee (denormalized for quick access)
-  assignedToId  String?
-  assignedTo    User?          @relation(fields: [assignedToId], references: [id])
-  
+  assignedToId String?
+  assignedTo   User?   @relation(fields: [assignedToId], references: [id])
+
   // Assignment history
-  assignments   AssetAssignment[]
-  
+  assignments AssetAssignment[]
+
   // Asset images
-  images        AssetImage[]
+  images AssetImage[]
 
   // Maintenance
   maintenanceSchedule AssetMaintenanceSchedule?
   maintenanceJobs     MaintenanceJob[]
-  
+
   // Activity log
-  activities    AssetActivity[]
+  activities AssetActivity[]
 
   @@unique([tenantId, serialNumber])
   @@unique([tenantId, assetTag])
@@ -205,23 +210,23 @@ model Asset {
 
 // Asset assignment history
 model AssetAssignment {
-  id          String    @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Asset being assigned
-  assetId     String
-  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
   // User being assigned to
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Assignment period
-  assignedAt  DateTime  @default(now())
-  returnedAt  DateTime? // Null means currently assigned
-  
+  assignedAt DateTime  @default(now())
+  returnedAt DateTime? // Null means currently assigned
+
   // Notes
-  notes       String?
-  
+  notes String?
+
   @@index([assetId])
   @@index([userId])
   @@map("asset_assignments")
@@ -229,28 +234,28 @@ model AssetAssignment {
 
 // Asset images with private storage
 model AssetImage {
-  id          String   @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // Asset relation
-  assetId     String
-  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
   // File metadata
-  fileName    String   // Original filename from upload
-  filePath    String   // Storage path: "tenant-id/assets/asset-id/original-xxx.jpg"
-  thumbPath   String?  // Thumbnail path (optional)
-  mimeType    String   // "image/jpeg", "image/png", etc.
-  size        Int      // File size in bytes
-  blobUrl     String?  // Full Vercel Blob URL (null for local storage)
+  fileName     String // Original filename from upload
+  filePath     String // Storage path: "tenant-id/assets/asset-id/original-xxx.jpg"
+  thumbPath    String? // Thumbnail path (optional)
+  mimeType     String // "image/jpeg", "image/png", etc.
+  size         Int // File size in bytes
+  blobUrl      String? // Full Vercel Blob URL (null for local storage)
   thumbBlobUrl String? // Thumbnail Blob URL (null for local storage)
-  
+
   // Display
-  isPrimary   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  
+  isPrimary Boolean @default(false)
+  sortOrder Int     @default(0)
+
   // Metadata
-  createdAt   DateTime @default(now())
-  
+  createdAt DateTime @default(now())
+
   @@index([assetId])
   @@map("asset_images")
 }
@@ -287,7 +292,7 @@ model AssetMaintenanceSchedule {
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
 
-  jobs          MaintenanceJob[]
+  jobs MaintenanceJob[]
 
   @@index([isActive])
   @@map("asset_maintenance_schedules")
@@ -301,22 +306,22 @@ enum MaintenanceJobStatus {
 }
 
 model MaintenanceJob {
-  id              String               @id @default(cuid())
+  id              String                   @id @default(cuid())
   assetId         String
-  asset           Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset           Asset                    @relation(fields: [assetId], references: [id], onDelete: Cascade)
   scheduleId      String
   schedule        AssetMaintenanceSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  status          MaintenanceJobStatus @default(OPEN)
+  status          MaintenanceJobStatus     @default(OPEN)
   dueAt           DateTime
   startedAt       DateTime?
   completedAt     DateTime?
   cancelledAt     DateTime?
   notes           String?
-  cost            Decimal?             @db.Decimal(10, 2)
+  cost            Decimal?                 @db.Decimal(10, 2)
   completedById   String?
   completedByName String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
 
   @@index([assetId, status])
   @@index([scheduleId, status])
@@ -330,25 +335,25 @@ model MaintenanceJob {
 
 // Asset activity log for audit trail
 model AssetActivity {
-  id          String         @id @default(cuid())
-  
+  id String @id @default(cuid())
+
   // What happened
-  action      AssetAction
-  details     Json?          // Action-specific context + performedBy
-  
+  action  AssetAction
+  details Json? // Action-specific context + performedBy
+
   // To which asset
-  assetId     String
-  asset       Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  
+  assetId String
+  asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
   // By whom (historical reference, NO foreign key to survive user deletion)
-  userId      String
-  
+  userId String
+
   // When
-  createdAt   DateTime       @default(now())
-  
+  createdAt DateTime @default(now())
+
   // Tenant for isolation
-  tenantId    String
-  
+  tenantId String
+
   @@index([assetId])
   @@index([tenantId, createdAt])
   @@index([tenantId, action])
@@ -371,4 +376,86 @@ enum AssetAction {
   MAINTENANCE_STARTED
   MAINTENANCE_COMPLETED
   MAINTENANCE_CANCELLED
+}
+
+// ============================================
+// NOTIFICATIONS (Module 10)
+// ============================================
+
+enum NotificationType {
+  MAINTENANCE_OVERDUE
+  MAINTENANCE_DUE_SOON
+  WARRANTY_EXPIRING
+  ASSET_ASSIGNED_TO_YOU
+}
+
+enum NotificationSourceType {
+  MAINTENANCE_JOB
+  ASSET
+  ASSET_ASSIGNMENT
+}
+
+model Notification {
+  id String @id @default(cuid())
+
+  // Routing
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // No FK on userId (mirrors AssetActivity) — preserves delivery history after user delete
+  userId   String
+
+  // Classification
+  type       NotificationType
+  sourceType NotificationSourceType
+  sourceId   String
+
+  // Fire-once dedupe key — shape per-type:
+  //   MAINTENANCE_OVERDUE    -> "job:<jobId>"
+  //   MAINTENANCE_DUE_SOON   -> "job:<jobId>"
+  //   WARRANTY_EXPIRING      -> "asset:<assetId>:<warrantyEnd-ISODate>"
+  //   ASSET_ASSIGNED_TO_YOU  -> "assignment:<assignmentId>"
+  dedupeKey String
+
+  // Pre-rendered display
+  title   String
+  body    String
+  payload Json?
+
+  // Channel-visibility flags (set per recipient prefs at write time)
+  inAppVisible  Boolean @default(true)
+  emailEligible Boolean @default(true)
+
+  // State
+  readAt      DateTime?
+  dismissedAt DateTime?
+  emailSentAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, userId, type, dedupeKey])
+  @@index([userId, tenantId, dismissedAt, readAt, createdAt])
+  @@index([tenantId, emailEligible, emailSentAt, readAt, dismissedAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id String @id @default(cuid())
+
+  // FK + cascade — prefs are config, not audit
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  type  NotificationType
+  inApp Boolean          @default(true)
+  email Boolean          @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, userId, type])
+  @@index([tenantId, userId])
+  @@map("notification_preferences")
 }

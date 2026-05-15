@@ -79,6 +79,20 @@ export {
     type CompleteMaintenanceJob,
 } from './maintenance';
 
+// Notification schemas
+export {
+    NotificationTypeSchema,
+    NotificationSourceTypeSchema,
+    CreateNotificationInputSchema,
+    UpdatePreferenceSchema,
+    ListNotificationsQuerySchema,
+    type NotificationType,
+    type NotificationSourceType,
+    type CreateNotificationInput,
+    type UpdatePreferenceInput,
+    type ListNotificationsQuery,
+} from './notification';
+
 // Helper functions
 export {
     validate,

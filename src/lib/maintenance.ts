@@ -1,4 +1,5 @@
-import { addDays, addMonths, addWeeks, addYears, endOfDay, startOfDay } from "date-fns";
+import { addDays, addMonths, addWeeks, addYears, endOfDay } from "date-fns";
+import { getTodayStart } from "@/lib/dates";
 import {
     type AssetAction,
     type MaintenanceJobStatus,
@@ -88,7 +89,7 @@ export function formatMaintenanceInterval(
 }
 
 export function getMaintenanceDueSoonRange(baseDate = new Date()) {
-    const start = startOfDay(baseDate);
+    const start = getTodayStart(baseDate);
     const end = endOfDay(addDays(start, MAINTENANCE_DUE_SOON_DAYS));
 
     return { start, end };

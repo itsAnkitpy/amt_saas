@@ -34,6 +34,7 @@ type TestAssetState = {
     status: string;
     assignedToId: string | null;
     archivedAt: Date | null;
+    name?: string;
 };
 
 type TestAssigneeState = {
@@ -176,6 +177,7 @@ function createAssetMutationClient(options: {
 
                 return {
                     id: state.asset.id,
+                    name: state.asset.name ?? "Test Asset",
                     status: state.asset.status,
                     assignedToId: state.asset.assignedToId,
                     archivedAt: state.asset.archivedAt,
@@ -439,7 +441,7 @@ test("assignAssetWithContext creates the assignment record, updates the asset, a
     });
     const { calls: activityCalls, logger } = createActivityLoggerSpy();
 
-    const asset = await assignAssetWithContext(
+    const result = await assignAssetWithContext(
         {
             assetId: "asset_123",
             assigneeId: "user_assignee",
@@ -451,7 +453,10 @@ test("assignAssetWithContext creates the assignment record, updates the asset, a
         logger
     );
 
-    assert.equal(asset.id, "asset_123");
+    assert.equal(result.asset.id, "asset_123");
+    assert.equal(result.assignmentId, "assignment_new");
+    assert.equal(result.assigneeId, "user_assignee");
+    assert.equal(result.assigneeName, "Jamie Lee");
     assert.deepEqual(calls.assignmentCreates, [
         {
             assetId: "asset_123",
