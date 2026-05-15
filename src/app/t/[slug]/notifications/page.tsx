@@ -24,7 +24,20 @@ import {
 
 interface NotificationsPageProps {
     params: Promise<{ slug: string }>;
-    searchParams: Promise<{ filter?: string }>;
+    searchParams: Promise<{ filter?: string; cursor?: string }>;
+}
+
+const PAGE_SIZE = 20;
+
+function buildHref(
+    slug: string,
+    opts: { unreadOnly?: boolean; cursor?: string },
+): string {
+    const qs = new URLSearchParams();
+    if (opts.unreadOnly) qs.set("filter", "unread");
+    if (opts.cursor) qs.set("cursor", opts.cursor);
+    const tail = qs.toString();
+    return `/t/${slug}/notifications${tail ? `?${tail}` : ""}`;
 }
 
 const TYPE_ICON: Record<NotificationType, React.ComponentType<{ className?: string }>> = {
@@ -46,12 +59,16 @@ export default async function NotificationsPage({
     searchParams,
 }: NotificationsPageProps) {
     const { slug } = await params;
-    const { filter } = await searchParams;
+    const { filter, cursor } = await searchParams;
     const { user, tenant } = await requireTenantAccess(slug);
 
     const unreadOnly = filter === "unread";
     const [page, unreadCount] = await Promise.all([
-        listNotificationsForUser(user.id, tenant.id, { unreadOnly, limit: 50 }),
+        listNotificationsForUser(user.id, tenant.id, {
+            unreadOnly,
+            limit: PAGE_SIZE,
+            cursor,
+        }),
         getUnreadCount(user.id, tenant.id),
     ]);
 
@@ -78,12 +95,12 @@ export default async function NotificationsPage({
             <div className="flex items-center justify-between gap-3 border-b pb-3">
                 <div className="flex gap-2">
                     <FilterPill
-                        href={`/t/${slug}/notifications`}
+                        href={buildHref(slug, {})}
                         active={!unreadOnly}
                         label="All"
                     />
                     <FilterPill
-                        href={`/t/${slug}/notifications?filter=unread`}
+                        href={buildHref(slug, { unreadOnly: true })}
                         active={unreadOnly}
                         label={`Unread${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
                     />
@@ -173,6 +190,34 @@ export default async function NotificationsPage({
                         );
                     })}
                 </ul>
+            )}
+
+            {(cursor || page.nextCursor) && (
+                <div className="flex items-center justify-between border-t pt-4 text-sm">
+                    {cursor ? (
+                        <Link
+                            href={buildHref(slug, { unreadOnly })}
+                            className="text-muted-foreground hover:text-foreground"
+                        >
+                            ← Back to newest
+                        </Link>
+                    ) : (
+                        <span />
+                    )}
+                    {page.nextCursor ? (
+                        <Link
+                            href={buildHref(slug, {
+                                unreadOnly,
+                                cursor: page.nextCursor,
+                            })}
+                            className="font-medium text-primary hover:underline"
+                        >
+                            Load older →
+                        </Link>
+                    ) : (
+                        <span />
+                    )}
+                </div>
             )}
         </div>
     );

@@ -119,6 +119,45 @@ export type RecipientSource = {
 };
 
 /**
+ * Per-scan cache for tenant-wide ADMIN+MANAGER recipients.
+ *
+ * Cron scans iterate many source rows that usually belong to a small set of
+ * tenants. Without this cache, every source row triggers a fresh user query;
+ * with it, each tenant is queried once per scan run.
+ */
+export class ScanRecipientCache {
+    private adminMgrByTenant = new Map<string, string[]>();
+    constructor(private client: RecipientResolverClient = db) {}
+
+    async getAdminMgr(tenantId: string): Promise<string[]> {
+        const cached = this.adminMgrByTenant.get(tenantId);
+        if (cached) return cached;
+        const rows = await this.client.user.findMany({
+            where: {
+                tenantId,
+                isActive: true,
+                role: { in: ["ADMIN", "MANAGER"] },
+            },
+            select: { id: true },
+        });
+        const ids = rows.map((r) => r.id);
+        this.adminMgrByTenant.set(tenantId, ids);
+        return ids;
+    }
+
+    /** Active + same-tenant check for an assignee not already in admin/mgr. */
+    async isValidAssignee(tenantId: string, assigneeId: string): Promise<boolean> {
+        const adminMgr = this.adminMgrByTenant.get(tenantId);
+        if (adminMgr?.includes(assigneeId)) return true;
+        const row = await this.client.user.findFirst({
+            where: { id: assigneeId, tenantId, isActive: true },
+            select: { id: true },
+        });
+        return row !== null;
+    }
+}
+
+/**
  * Returns the recipient userIds for a given event type per PRD §5.
  *
  *   OVERDUE              -> ADMIN+MANAGER tenant-wide ∪ assignee (if any)
@@ -128,11 +167,15 @@ export type RecipientSource = {
  *
  * Always excludes `isActive=false` users. Tenant-active filtering is the
  * scan's responsibility (applied at the source query for efficiency).
+ *
+ * Pass `cache` from a cron scan to avoid re-querying ADMIN+MANAGER per
+ * source row.
  */
 export async function resolveRecipientsForType(
     type: NotificationType,
     source: RecipientSource,
     client: RecipientResolverClient = db,
+    cache?: ScanRecipientCache,
 ): Promise<string[]> {
     if (type === "ASSET_ASSIGNED_TO_YOU") {
         if (!source.assigneeId) return [];
@@ -149,6 +192,14 @@ export async function resolveRecipientsForType(
 
     const includeAssignee =
         type === "MAINTENANCE_OVERDUE" && !!source.assigneeId;
+
+    if (cache) {
+        const adminMgr = await cache.getAdminMgr(source.tenantId);
+        if (!includeAssignee) return adminMgr;
+        if (adminMgr.includes(source.assigneeId!)) return adminMgr;
+        const ok = await cache.isValidAssignee(source.tenantId, source.assigneeId!);
+        return ok ? [...adminMgr, source.assigneeId!] : adminMgr;
+    }
 
     const users = await client.user.findMany({
         where: {

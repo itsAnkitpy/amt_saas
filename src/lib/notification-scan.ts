@@ -6,6 +6,7 @@ import {
     type CreateNotificationInput,
     createNotification,
     resolveRecipientsForType,
+    ScanRecipientCache,
 } from "@/lib/notification-service";
 
 /**
@@ -81,6 +82,7 @@ async function scanMaintenanceWindow(
     where: { lt: Date } | { gte: Date; lte: Date },
 ): Promise<ScanResult> {
     const result: ScanResult = { ...EMPTY };
+    const cache = new ScanRecipientCache();
     let cursor: string | undefined;
 
     for (let page = 0; page < SCAN_MAX_PAGES; page++) {
@@ -115,10 +117,15 @@ async function scanMaintenanceWindow(
         for (const job of jobs) {
             result.processed += 1;
 
-            const recipients = await resolveRecipientsForType(type, {
-                tenantId: job.asset.tenantId,
-                assigneeId: job.asset.assignedToId,
-            });
+            const recipients = await resolveRecipientsForType(
+                type,
+                {
+                    tenantId: job.asset.tenantId,
+                    assigneeId: job.asset.assignedToId,
+                },
+                db,
+                cache,
+            );
 
             const dueLabel = formatDate(job.dueAt);
             const title =
@@ -191,6 +198,7 @@ export async function scanExpiringWarranties(
     const result: ScanResult = { ...EMPTY };
     const today = getTodayStart(now);
     const horizon = addDays(today, WARRANTY_DAYS);
+    const cache = new ScanRecipientCache();
 
     let cursor: string | undefined;
 
@@ -219,10 +227,15 @@ export async function scanExpiringWarranties(
             if (!asset.warrantyEnd) continue;
             result.processed += 1;
 
-            const recipients = await resolveRecipientsForType("WARRANTY_EXPIRING", {
-                tenantId: asset.tenantId,
-                assigneeId: asset.assignedToId,
-            });
+            const recipients = await resolveRecipientsForType(
+                "WARRANTY_EXPIRING",
+                {
+                    tenantId: asset.tenantId,
+                    assigneeId: asset.assignedToId,
+                },
+                db,
+                cache,
+            );
 
             const endLabel = formatDate(asset.warrantyEnd);
             // ISO date (YYYY-MM-DD) is the dedupe suffix so a date change re-fires.

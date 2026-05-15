@@ -3,7 +3,12 @@ import { createRequire } from "node:module";
 import test from "node:test";
 
 const require = createRequire(import.meta.url);
-const { buildDedupeKey, computeVisibilityFlags, resolveRecipientsForType } = require(
+const {
+    buildDedupeKey,
+    computeVisibilityFlags,
+    resolveRecipientsForType,
+    ScanRecipientCache,
+} = require(
     "./notification-service.ts",
 ) as typeof import("./notification-service");
 
@@ -16,20 +21,50 @@ type FakeUser = {
 
 type ResolverClient = Parameters<typeof resolveRecipientsForType>[2];
 
-function makeUserClient(users: FakeUser[]): ResolverClient {
+type FindManyArgs = {
+    where: {
+        tenantId: string;
+        isActive: boolean;
+        OR?: Array<{ role?: { in: string[] } } | { id: string }>;
+        role?: { in: string[] };
+    };
+};
+
+function makeUserClient(
+    users: FakeUser[],
+    counter?: { findMany: number; findFirst: number },
+): ResolverClient {
     return {
         user: {
-            findMany: async ({ where, select: _select }: { where: { tenantId: string; isActive: boolean; OR: Array<{ role?: { in: string[] } } | { id: string }> }; select?: unknown }) => {
+            findMany: async ({ where }: FindManyArgs) => {
+                if (counter) counter.findMany += 1;
                 return users
-                    .filter((u) => u.tenantId === where.tenantId && u.isActive === where.isActive)
-                    .filter((u) => where.OR.some((clause) => {
-                        if ("role" in clause && clause.role) return clause.role.in.includes(u.role);
-                        if ("id" in clause && clause.id) return u.id === clause.id;
-                        return false;
-                    }))
+                    .filter(
+                        (u) =>
+                            u.tenantId === where.tenantId &&
+                            u.isActive === where.isActive,
+                    )
+                    .filter((u) => {
+                        if (where.role) return where.role.in.includes(u.role);
+                        if (where.OR) {
+                            return where.OR.some((clause) => {
+                                if ("role" in clause && clause.role)
+                                    return clause.role.in.includes(u.role);
+                                if ("id" in clause && clause.id)
+                                    return u.id === clause.id;
+                                return false;
+                            });
+                        }
+                        return true;
+                    })
                     .map((u) => ({ id: u.id }));
             },
-            findFirst: async ({ where }: { where: { id: string; tenantId: string; isActive: boolean } }) => {
+            findFirst: async ({
+                where,
+            }: {
+                where: { id: string; tenantId: string; isActive: boolean };
+            }) => {
+                if (counter) counter.findFirst += 1;
                 const found = users.find(
                     (u) =>
                         u.id === where.id &&
@@ -231,4 +266,76 @@ test("resolveRecipientsForType: ASSIGNED_TO_YOU with cross-tenant id returns []"
         makeUserClient(usersFixture),
     );
     assert.deepEqual(ids, []);
+});
+
+// ============================================
+// ScanRecipientCache
+// ============================================
+
+test("ScanRecipientCache: tenant ADMIN+MANAGER set queried only once across N source rows", async () => {
+    const counter = { findMany: 0, findFirst: 0 };
+    const client = makeUserClient(usersFixture, counter);
+    const cache = new ScanRecipientCache(client);
+
+    // Simulate 5 source rows in the same tenant, no assignee (e.g. DUE_SOON).
+    for (let i = 0; i < 5; i++) {
+        const ids = await resolveRecipientsForType(
+            "MAINTENANCE_DUE_SOON",
+            { tenantId: TENANT },
+            client,
+            cache,
+        );
+        assert.deepEqual(ids.sort(), ["admin_a", "mgr_a"]);
+    }
+
+    // Without cache: 5 findMany. With cache: 1.
+    assert.equal(counter.findMany, 1, "admin/mgr query runs once per tenant per scan");
+    assert.equal(counter.findFirst, 0);
+});
+
+test("ScanRecipientCache: OVERDUE with assignee in admin/mgr set adds no extra query", async () => {
+    const counter = { findMany: 0, findFirst: 0 };
+    const client = makeUserClient(usersFixture, counter);
+    const cache = new ScanRecipientCache(client);
+
+    // First call primes the cache.
+    await resolveRecipientsForType(
+        "MAINTENANCE_OVERDUE",
+        { tenantId: TENANT, assigneeId: "admin_a" },
+        client,
+        cache,
+    );
+    // Assignee is already an ADMIN, so no extra findFirst.
+    assert.equal(counter.findMany, 1);
+    assert.equal(counter.findFirst, 0);
+});
+
+test("ScanRecipientCache: OVERDUE with non-admin assignee uses cached findFirst path", async () => {
+    const counter = { findMany: 0, findFirst: 0 };
+    const client = makeUserClient(usersFixture, counter);
+    const cache = new ScanRecipientCache(client);
+
+    const ids = await resolveRecipientsForType(
+        "MAINTENANCE_OVERDUE",
+        { tenantId: TENANT, assigneeId: "user_a" },
+        client,
+        cache,
+    );
+    assert.deepEqual(ids.sort(), ["admin_a", "mgr_a", "user_a"]);
+    assert.equal(counter.findMany, 1);
+    assert.equal(counter.findFirst, 1, "one targeted assignee validation");
+});
+
+test("ScanRecipientCache: invalid assignee is dropped, admin+mgr still returned", async () => {
+    const counter = { findMany: 0, findFirst: 0 };
+    const client = makeUserClient(usersFixture, counter);
+    const cache = new ScanRecipientCache(client);
+
+    const ids = await resolveRecipientsForType(
+        "MAINTENANCE_OVERDUE",
+        { tenantId: TENANT, assigneeId: "admin_inactive" },
+        client,
+        cache,
+    );
+    assert.deepEqual(ids.sort(), ["admin_a", "mgr_a"]);
 });
