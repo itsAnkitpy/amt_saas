@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { sendDailyDigests, type DigestResult } from "@/lib/notification-digest";
 import {
     scanDueSoonMaintenance,
     scanExpiringWarranties,
@@ -12,10 +13,13 @@ import {
  * Auth: `Authorization: Bearer ${CRON_SECRET}` — Vercel Cron injects this
  * header automatically when `CRON_SECRET` is set on the project.
  *
- * Scope (M2): in-app notifications only. No email yet (M3).
+ * Pipeline:
+ *   1. Scan overdue / due-soon / warranty → insert in-app notifications.
+ *   2. Send daily digest emails for unread + email-eligible rows.
  *
  * Bubbles infra errors to the cron run log; per-recipient `createNotification`
- * failures are caught inside the scan and counted in `failed`.
+ * failures are caught inside the scan, per-user `sendEmail` failures are
+ * caught inside the digest sender.
  */
 
 // Force-disable static evaluation / caching at build time.
@@ -28,6 +32,7 @@ type CronResponse = {
         overdue: ScanResult;
         dueSoon: ScanResult;
         warranty: ScanResult;
+        digest: DigestResult;
     };
 };
 
@@ -43,13 +48,14 @@ export async function GET(req: Request): Promise<Response> {
     const overdue = await scanOverdueMaintenance(now);
     const dueSoon = await scanDueSoonMaintenance(now);
     const warranty = await scanExpiringWarranties(now);
+    const digest = await sendDailyDigests(now);
 
     const durationMs = Date.now() - started;
 
     const body: CronResponse = {
         ok: true,
         durationMs,
-        results: { overdue, dueSoon, warranty },
+        results: { overdue, dueSoon, warranty, digest },
     };
 
     console.log("[cron/notifications/daily] complete", body);

@@ -22,8 +22,47 @@ const EnvSchema = z.object({
     // Vercel Cron injects this same value as `Authorization: Bearer <secret>`.
     CRON_SECRET: z.string().min(16, 'CRON_SECRET must be at least 16 chars'),
 
+    // Mail transport (Module 10 M3).
+    // `mailpit` for local SMTP via nodemailer; `resend` for staging/prod via Resend SDK.
+    MAIL_TRANSPORT: z.enum(['mailpit', 'resend']),
+    MAIL_FROM: z.string().email('MAIL_FROM must be a valid email'),
+
+    // Mailpit — required only when MAIL_TRANSPORT=mailpit (enforced below).
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.coerce.number().int().positive().optional(),
+
+    // Resend — required only when MAIL_TRANSPORT=resend (enforced below).
+    RESEND_API_KEY: z.string().optional(),
+
+    // Staging safety: when set, every outbound recipient list collapses to this address.
+    EMAIL_OVERRIDE_TO: z.string().email().optional(),
+
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+}).superRefine((env, ctx) => {
+    if (env.MAIL_TRANSPORT === 'mailpit') {
+        if (!env.SMTP_HOST) {
+            ctx.addIssue({
+                code: 'custom',
+                message: 'SMTP_HOST required when MAIL_TRANSPORT=mailpit',
+                path: ['SMTP_HOST'],
+            });
+        }
+        if (!env.SMTP_PORT) {
+            ctx.addIssue({
+                code: 'custom',
+                message: 'SMTP_PORT required when MAIL_TRANSPORT=mailpit',
+                path: ['SMTP_PORT'],
+            });
+        }
+    }
+    if (env.MAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
+        ctx.addIssue({
+            code: 'custom',
+            message: 'RESEND_API_KEY required when MAIL_TRANSPORT=resend',
+            path: ['RESEND_API_KEY'],
+        });
+    }
 });
 
 // Parse environment variables - fails fast if invalid
