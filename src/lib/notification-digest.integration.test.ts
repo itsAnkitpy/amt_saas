@@ -277,7 +277,7 @@ test("digest failure isolation: failed user's rows stay unsent and other users s
 // Inactive user
 // ============================================
 
-test("digest skips users with no active record; rows remain unsent for retry", async () => {
+test("digest skips users with no active record and stamps their rows so they are not reprocessed", async () => {
     await clearNotifications();
 
     await db.notification.create({
@@ -299,12 +299,13 @@ test("digest skips users with no active record; rows remain unsent for retry", a
     assert.equal(result.usersAttempted, 1);
     assert.equal(result.usersSkipped, 1);
     assert.equal(result.digestsSent, 0);
+    assert.equal(result.rowsMarked, 1);
     assert.equal(recorder.calls.length, 0);
 
     const row = await db.notification.findFirstOrThrow({
         where: { sourceId: "job_inactive" },
     });
-    assert.equal(row.emailSentAt, null);
+    assert.notEqual(row.emailSentAt, null);
 });
 
 // ============================================

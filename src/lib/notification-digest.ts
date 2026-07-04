@@ -12,7 +12,9 @@ import { DailyDigest, type DigestItem, type DigestSections } from "@/emails/dail
  *   2. Groups by recipient userId.
  *   3. Sends one digest per user with bounded concurrency.
  *   4. On success, stamps `emailSentAt = NOW()` on that user's rows.
- *   5. On failure, leaves rows untouched so the next run retries.
+ *   5. On send failure, leaves rows untouched so the next run retries.
+ *   6. Skipped users (inactive / no email) get their rows stamped too, so
+ *      they never re-enter the eligible set.
  *
  * Failure isolation: a thrown send error for user A does not prevent users
  * B–Z from being processed. Per-tenant queries cap memory.
@@ -179,6 +181,21 @@ export async function sendDailyDigests(
                     rowCount: userRows.length,
                 });
                 result.usersSkipped += 1;
+                // Stamp the rows anyway: an inactive/emailless user must not keep
+                // their rows in the eligible set to be refetched every run forever.
+                try {
+                    const updated = await db.notification.updateMany({
+                        where: { id: { in: userRows.map((r) => r.id) } },
+                        data: { emailSentAt: now },
+                    });
+                    result.rowsMarked += updated.count;
+                } catch (err) {
+                    console.error("[notification-digest] failed to stamp skipped rows", {
+                        tenantId,
+                        userId,
+                        error: err instanceof Error ? err.message : String(err),
+                    });
+                }
                 return;
             }
 
@@ -210,14 +227,24 @@ export async function sendDailyDigests(
                 return;
             }
 
-            // Stamp only this user's rows. Failures above keep rows null for next-day retry.
-            const ids = userRows.map((r) => r.id);
-            const updated = await db.notification.updateMany({
-                where: { id: { in: ids } },
-                data: { emailSentAt: now },
-            });
+            // Stamp only this user's rows. Send failures above keep rows null for
+            // next-day retry. A stamp failure must not abort the whole run: log it
+            // and move on — the rows retry next day (at-least-once delivery).
             result.digestsSent += 1;
-            result.rowsMarked += updated.count;
+            try {
+                const updated = await db.notification.updateMany({
+                    where: { id: { in: userRows.map((r) => r.id) } },
+                    data: { emailSentAt: now },
+                });
+                result.rowsMarked += updated.count;
+            } catch (err) {
+                console.error("[notification-digest] emailSentAt stamp failed after send", {
+                    tenantId,
+                    userId,
+                    rowCount: userRows.length,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
         });
     }
 
