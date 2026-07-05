@@ -2,6 +2,7 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { WebhookEvent } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
+import { handleUserDeleted } from "@/lib/user-lifecycle";
 
 export async function POST(req: Request) {
     const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -93,13 +94,27 @@ export async function POST(req: Request) {
             case "user.deleted": {
                 const { id } = evt.data;
 
-                if (id) {
-                    // Delete user from our database
-                    await db.user.delete({
-                        where: { id: id },
-                    });
+                if (!id) {
+                    break;
+                }
 
-                    console.log(`Deleted user: ${id}`);
+                // Abandoned signups have no DB row (create is a no-op), so this
+                // guards against a P2025 that would 500 + retry forever, and it
+                // deactivates a workspace left with no active admin. See
+                // handleUserDeleted.
+                const outcome = await handleUserDeleted(id);
+                if (!outcome.deleted) {
+                    console.log(
+                        `user.deleted webhook for non-existent user: ${id}. Nothing to delete.`
+                    );
+                    break;
+                }
+
+                console.log(`Deleted user: ${id}`);
+                if (outcome.deactivatedTenantId) {
+                    console.warn(
+                        `[Webhook] Last admin of tenant ${outcome.deactivatedTenantId} deleted — workspace deactivated.`
+                    );
                 }
                 break;
             }
