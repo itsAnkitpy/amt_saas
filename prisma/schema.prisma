@@ -31,6 +31,7 @@ model Tenant {
   departments             Department[]
   notifications           Notification[]
   notificationPreferences NotificationPreference[]
+  invitations             Invitation[]
 
   @@map("tenants")
 }
@@ -83,6 +84,51 @@ enum Role {
   ADMIN
   MANAGER
   USER
+}
+
+// ============================================
+// TEAMMATE INVITES (Module 12)
+// ============================================
+
+// A pending/settled invitation for someone to join a tenant. This is our own
+// source of truth (D2) — Clerk only delivers the email + gates sign-up to the
+// invited address (D5). Claim-at-login turns a PENDING invite into a User row.
+model Invitation {
+  id String @id @default(cuid())
+
+  // Who is invited, and into which workspace.
+  email    String // invited address; verified at claim time (Clerk-confirmed)
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role     Role   @default(USER) // bounded at write time — never SUPER_ADMIN (M5)
+
+  status InvitationStatus @default(PENDING)
+
+  // Inviter's user id — NO foreign key on purpose (audit-style, mirrors
+  // AssetActivity.userId): the invite survives the inviter being deleted
+  // before the teammate accepts.
+  invitedById String
+
+  // Clerk invite id — transport handle for revoke/reconcile. Nullable for the
+  // manual "add without email" superadmin fallback (D3), which has no Clerk invite.
+  clerkInvitationId String?
+
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime // set in code (e.g. now + 7 days); no static Prisma default
+  acceptedAt DateTime?
+
+  // Claim-at-login looks up by (email, status). At-most-one PENDING per
+  // (email, tenantId) is enforced in the service, not a partial-unique index.
+  @@index([email, status])
+  @@index([tenantId])
+  @@map("invitations")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
 }
 
 // ============================================

@@ -11,7 +11,10 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { ArrowLeftIcon, UsersIcon } from "lucide-react";
+import { ArrowLeftIcon, MailIcon, UsersIcon } from "lucide-react";
+import { listPendingInvitations } from "@/lib/invitation-service";
+import { InviteTeammateForm } from "./invite-teammate-form";
+import { revokeInvitationAction } from "./actions";
 
 interface UsersPageProps {
     params: Promise<{ slug: string }>;
@@ -50,6 +53,9 @@ export default async function UsersPage({ params }: UsersPageProps) {
         },
         orderBy: { firstName: "asc" },
     });
+
+    // Still-valid pending invites for this workspace (M4 pending list).
+    const pendingInvites = await listPendingInvitations(tenant.id);
 
     return (
         <div>
@@ -137,12 +143,75 @@ export default async function UsersPage({ params }: UsersPageProps) {
                 </Table>
             </div>
 
-            {/* Info */}
-            <div className="mt-6 rounded-lg border bg-zinc-50 p-4 dark:bg-zinc-900">
-                <p className="text-sm text-zinc-600">
-                    💡 To add new team members, contact your superadmin or use the Admin Panel.
+            {/* Invite a teammate (client door — no superadmin needed) */}
+            <div className="mt-8 rounded-lg border bg-white p-6 dark:bg-zinc-950">
+                <div className="flex items-center gap-2">
+                    <MailIcon className="h-5 w-5 text-violet-600" />
+                    <h3 className="text-lg font-semibold">Invite a teammate</h3>
+                </div>
+                <p className="mt-1 text-sm text-zinc-600">
+                    They&apos;ll get an email to set their own password and join {tenant.name}.
                 </p>
+                <div className="mt-4">
+                    <InviteTeammateForm slug={slug} />
+                </div>
             </div>
+
+            {/* Pending invites */}
+            {pendingInvites.length > 0 && (
+                <div className="mt-6 rounded-lg border bg-white dark:bg-zinc-950">
+                    <div className="border-b px-6 py-4">
+                        <h3 className="text-lg font-semibold">Pending invites</h3>
+                        <p className="text-sm text-zinc-600">
+                            {pendingInvites.length} invitation
+                            {pendingInvites.length === 1 ? "" : "s"} awaiting sign-up
+                        </p>
+                    </div>
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Expires</TableHead>
+                                <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {pendingInvites.map((invite) => (
+                                <TableRow key={invite.id}>
+                                    <TableCell className="font-medium">{invite.email}</TableCell>
+                                    <TableCell>
+                                        <Badge className={roleColors[invite.role] || roleColors.USER}>
+                                            {invite.role}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-zinc-500">
+                                        {invite.expiresAt.toLocaleDateString()}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <form
+                                            action={revokeInvitationAction.bind(
+                                                null,
+                                                slug,
+                                                invite.id
+                                            )}
+                                        >
+                                            <Button
+                                                type="submit"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-red-600 hover:text-red-700"
+                                            >
+                                                Revoke
+                                            </Button>
+                                        </form>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
         </div>
     );
 }

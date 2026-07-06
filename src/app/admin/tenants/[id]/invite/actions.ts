@@ -6,6 +6,37 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Role } from "@/generated/prisma";
 import { clerkClient } from "@clerk/nextjs/server";
+import { inviteToTenant } from "@/lib/invitation-service";
+
+/**
+ * Superadmin door (parity): send an email invitation through the SAME shared
+ * engine the client door uses (D3). The teammate sets their own password; our
+ * Invitation table stays the source of truth. Throws on failure to surface the
+ * message on this internal admin page, matching createUserForTenant's style.
+ */
+export async function inviteToTenantByEmail(tenantId: string, formData: FormData) {
+    const superadmin = await requireSuperAdmin();
+
+    const email = ((formData.get("email") as string | null) ?? "").trim();
+    const role = ((formData.get("role") as string | null) ?? "USER") as Role;
+
+    if (!email) {
+        throw new Error("Email is required");
+    }
+
+    const result = await inviteToTenant({
+        tenantId,
+        email,
+        role,
+        invitedById: superadmin.id,
+    });
+    if (!result.ok) {
+        throw new Error(result.error);
+    }
+
+    revalidatePath(`/admin/tenants/${tenantId}`);
+    redirect(`/admin/tenants/${tenantId}`);
+}
 
 /**
  * Create a new user for a tenant (direct creation, no email invite)
