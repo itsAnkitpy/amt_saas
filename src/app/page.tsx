@@ -25,37 +25,37 @@ const FEATURES = [
   {
     id: "tracking",
     title: "Asset Tracking",
-    description: "Track all your assets in one place. From hardware to software licenses.",
+    description: "Every asset in one place, with a QR label and a full history.",
     icon: Search,
     benefits: [
-      "Real-time asset location tracking",
-      "QR & Barcode scanning support",
-      "Complete asset lifecycle history",
-      "Custom fields for unique requirements"
+      "QR & barcode scanning with printable labels",
+      "Assign and unassign assets to teammates",
+      "Complete activity history on every asset",
+      "Custom fields per category for your own data"
     ]
   },
   {
     id: "maintenance",
     title: "Maintenance",
-    description: "Proactive maintenance scheduling to reduce downtime.",
+    description: "Recurring schedules so servicing never slips through the cracks.",
     icon: Zap,
     benefits: [
-      "Automated maintenance schedules",
-      "Service history logging",
-      "Downtime tracking & alerts",
-      "Vendor management integration"
+      "Recurring maintenance schedules per asset",
+      "Track jobs from due to in-progress to done",
+      "Due-soon and overdue alerts",
+      "Service notes and costs on every job"
     ]
   },
   {
     id: "reporting",
-    title: "Reporting",
-    description: "Deep insights into asset utilization and costs.",
+    title: "Dashboard & Alerts",
+    description: "A live overview of status, condition, and what needs attention.",
     icon: BarChart3,
     benefits: [
-      "Depreciation calculations",
-      "Cost of ownership analysis",
-      "Audit-ready compliance reports",
-      "Customizable dashboards"
+      "Status, category, and condition charts",
+      "Warranty expiry alerts before it's too late",
+      "Action center for items needing attention",
+      "Workspace-wide activity audit trail"
     ]
   }
 ];
@@ -83,47 +83,22 @@ const PAIN_POINTS = [
   }
 ];
 
-const SOCIAL_PROOF_LOGOS = [
-  "Acme Corp", "Global Tech", "Nebula Include", "Vertex Systems", "Horizon Group"
-];
-
-const TESTIMONIALS = [
-  {
-    quote: "Before AssetLane, we were managing assets across 12 locations using spreadsheets. We'd lose track of equipment constantly. Now we have 100% visibility.",
-    author: "Sarah Chen",
-    role: "Director of Operations",
-    company: "Acme Manufacturing"
-  },
-  {
-    quote: "We implemented AssetLane in 2 weeks and saw results immediately. Reduced asset loss by 60% and saved over $200,000 in the first year.",
-    author: "Michael Ross",
-    role: "IT Director",
-    company: "Vertex Systems"
-  },
-  {
-    quote: "Finally, an asset management system that actually works for multi-tenant setups. The audit reports save us weeks of work.",
-    author: "Jessica Li",
-    role: "Financial Controller",
-    company: "Global Tech"
-  }
-];
-
 const FAQS = [
   {
-    question: "We already have a system in place. Migration seems painful.",
-    answer: "We offer white-glove onboarding with free data migration. Our implementation team has migrated 500+ organizations from spreadsheets, legacy systems, and competitors. Average migration time is just 2 weeks."
-  },
-  {
-    question: "How long until we see ROI?",
-    answer: "Most customers report measurable time savings within the first month. On average, teams save 12 hours per week on manual tracking. That translates to thousands in recovered productivity immediately."
+    question: "We already track assets in a spreadsheet. How do we move over?",
+    answer: "Use the built-in CSV importer. Download the template, fill it from your existing sheet, and upload. Every row is validated before anything is written, so bad data never lands in your workspace."
   },
   {
     question: "Is our data secure?",
-    answer: "Yes. We're SOC 2 Type II certified and GDPR compliant. Your data is encrypted at rest and in transit. Our multi-tenant architecture ensures complete data isolation for every workspace."
+    answer: "Each workspace's data is fully isolated — every query and every page is scoped to your workspace and checked against your access. Sign-in is handled by Clerk, so passwords never touch our servers."
   },
   {
-    question: "What if we need to scale to more locations?",
-    answer: "Our architecture is built for scale. Pricing is per-asset, not per-location, so you can expand endlessly without hidden costs or infrastructure headaches."
+    question: "What does it cost?",
+    answer: "AssetLane is free to use while in early access — no credit card required. Paid plans will come later, with clear notice before anything changes."
+  },
+  {
+    question: "Can my team use it too?",
+    answer: "Yes. Invite teammates by email and set their role — Admin, Manager, or User — to control who can manage assets, categories, and settings."
   }
 ];
 
@@ -181,7 +156,6 @@ export default async function Home() {
 
           <div className="hidden md:flex items-center gap-8">
             <Link href="#features" className="text-sm font-medium text-zinc-600 hover:text-violet-600 dark:text-zinc-400 dark:hover:text-white transition-colors">Features</Link>
-            <Link href="#social-proof" className="text-sm font-medium text-zinc-600 hover:text-violet-600 dark:text-zinc-400 dark:hover:text-white transition-colors">Customers</Link>
             <Link href="#faq" className="text-sm font-medium text-zinc-600 hover:text-violet-600 dark:text-zinc-400 dark:hover:text-white transition-colors">FAQ</Link>
           </div>
 
@@ -191,11 +165,18 @@ export default async function Home() {
                 <Button>Dashboard <ChevronRight className="ml-1 h-4 w-4" /></Button>
               </Link>
             ) : (
-              <Link href="/sign-in">
-                <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
-                  Sign In
-                </Button>
-              </Link>
+              <>
+                <Link href="/sign-in" className="hidden sm:block">
+                  <Button variant="ghost" className="text-zinc-600 dark:text-zinc-300">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link href="/sign-up">
+                  <Button className="bg-violet-600 hover:bg-violet-700 text-white shadow-lg shadow-violet-500/20">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
             )}
           </div>
         </Container>
@@ -211,7 +192,7 @@ export default async function Home() {
           <Container className="text-center">
             <Badge variant="outline" className="mb-8 px-4 py-1.5 rounded-full border-zinc-200 text-zinc-600 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:text-zinc-300">
               <span className="mr-1.5 flex h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              New: Mobile Scanning App Included
+              New: Scan assets with your phone camera
             </Badge>
 
             <h1 className="mx-auto max-w-5xl text-5xl font-bold tracking-tight text-zinc-900 dark:text-white sm:text-6xl lg:text-7xl mb-8">
@@ -220,26 +201,28 @@ export default async function Home() {
             </h1>
 
             <p className="mx-auto max-w-2xl text-lg text-zinc-600 dark:text-zinc-400 mb-10 leading-relaxed">
-              The multi-tenant asset management platform trusted by 500+ operations teams to manage 2M+ assets across multiple locations. Finally escape spreadsheet chaos.
+              QR-code asset management for teams that have outgrown spreadsheets. Track, assign, and maintain every asset from one shared workspace.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-              <Link href="#contact" className="w-full sm:w-auto">
+              <Link href={userId ? "/dashboard" : "/sign-up"} className="w-full sm:w-auto">
                 <Button size="lg" className="w-full h-14 px-8 text-lg bg-violet-600 hover:bg-violet-700 shadow-xl shadow-violet-500/20">
-                  Request a Demo <ArrowRight className="ml-2 h-5 w-5" />
+                  {userId ? "Go to Dashboard" : "Start Free"} <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link href="/sign-in" className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
-                  Sign In
-                </Button>
-              </Link>
+              {!userId && (
+                <Link href="/sign-in" className="w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
+                    Sign In
+                  </Button>
+                </Link>
+              )}
             </div>
 
             <div className="flex items-center justify-center gap-6 text-sm text-zinc-500 dark:text-zinc-400">
-              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-500" /> SOC 2 Certified</span>
-              <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> 14-Day Free Trial</span>
-              <span className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-emerald-500" /> Setup in 5 mins</span>
+              <span className="flex items-center gap-1.5"><ShieldCheck className="h-4 w-4 text-emerald-500" /> Isolated workspace per team</span>
+              <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-emerald-500" /> Free while in early access</span>
+              <span className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-emerald-500" /> Set up in minutes</span>
             </div>
 
             {/* Hero Image Mockup */}
@@ -253,20 +236,6 @@ export default async function Home() {
                   priority
                 />
               </div>
-            </div>
-          </Container>
-        </section>
-
-        {/* Social Proof Section */}
-        <section id="social-proof" className="border-y border-zinc-100 bg-zinc-50/50 py-12 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <Container>
-            <p className="text-center text-sm font-semibold uppercase tracking-wider text-zinc-500 mb-8">Trusted by 500+ Operations Teams</p>
-            <div className="grid grid-cols-2 gap-8 md:grid-cols-5 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-              {SOCIAL_PROOF_LOGOS.map((logo, i) => (
-                <div key={i} className="flex items-center justify-center">
-                  <div className="h-8 w-32 bg-zinc-300 dark:bg-zinc-700 rounded animate-pulse opacity-50 flex items-center justify-center text-xs text-white font-bold">{logo}</div>
-                </div>
-              ))}
             </div>
           </Container>
         </section>
@@ -292,12 +261,6 @@ export default async function Home() {
               ))}
             </div>
 
-            <div className="mt-16 bg-zinc-50 rounded-2xl p-8 border border-zinc-100 text-center dark:bg-zinc-900 dark:border-zinc-800">
-              <p className="text-lg font-medium text-zinc-900 dark:text-white mb-6">
-                The average operations team loses <span className="text-red-600 font-bold">12 hours per week</span> to manual asset tracking.
-                <br className="hidden sm:block" /> That&rsquo;s 624 hours per year. What would you do with that time back?
-              </p>
-            </div>
           </Container>
         </Section>
 
@@ -341,19 +304,19 @@ export default async function Home() {
           <Container>
             <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-20">
               <div className="lg:w-1/2">
-                <Badge className="mb-6 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 border-0">Mobile Scanning</Badge>
+                <Badge className="mb-6 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 border-0">QR Scanning</Badge>
                 <h2 className="text-3xl sm:text-4xl font-bold text-zinc-900 dark:text-white mb-6">
                   Scan. Track. Done.
                 </h2>
                 <p className="text-lg text-zinc-600 dark:text-zinc-400 mb-8">
-                  Turn every smartphone on your team into a powerful enterprise scanner. Update asset locations, assign equipment, or perform audits in seconds.
+                  Every asset gets a printable QR label. Point any phone camera at it to pull up the asset instantly — right in the browser, nothing to install.
                 </p>
                 <ul className="space-y-4 mb-8">
                   {[
-                    "Instant QR & Barcode lookup",
-                    "Offline mode support",
-                    "Photo attachments for damage reports",
-                    "GPS location tagging"
+                    "Instant QR & barcode lookup",
+                    "Assign or unassign right from the scan screen",
+                    "Printable QR labels for every asset",
+                    "Works in any mobile browser — no app needed"
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-3 font-medium text-zinc-900 dark:text-zinc-200">
                       <div className="h-6 w-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center dark:bg-indigo-900/50 dark:text-indigo-400">
@@ -363,9 +326,11 @@ export default async function Home() {
                     </li>
                   ))}
                 </ul>
-                <Button variant="outline" className="h-12 border-zinc-200 text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:text-white dark:hover:bg-zinc-900 group">
-                  Explore Mobile Features <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </Button>
+                <Link href={userId ? "/dashboard" : "/sign-up"}>
+                  <Button variant="outline" className="h-12 border-zinc-200 text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:text-white dark:hover:bg-zinc-900 group">
+                    Try Scanning Free <ChevronRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Button>
+                </Link>
               </div>
               <div className="lg:w-1/2">
                 <div className="relative rounded-2xl bg-zinc-900 p-2 shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 rotate-1 transform transition-transform hover:rotate-0 duration-500">
@@ -378,32 +343,6 @@ export default async function Home() {
                   </div>
                 </div>
               </div>
-            </div>
-          </Container>
-        </Section>
-
-        {/* Testimonials */}
-        <Section className="bg-zinc-50 dark:bg-zinc-900/30 text-center">
-          <Container>
-            <SectionHeading
-              title="What Our Customers Say"
-              subtitle="Join 500+ teams who have transformed their operations."
-            />
-            <div className="grid md:grid-cols-3 gap-8">
-              {TESTIMONIALS.map((t, i) => (
-                <Card key={i} className="bg-white dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800 shadow-sm p-6 text-left">
-                  <div className="mb-6 flex gap-1 text-amber-400">
-                    {[1, 2, 3, 4, 5].map(star => <svg key={star} className="h-5 w-5 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>)}
-                  </div>
-                  <p className="text-zinc-700 dark:text-zinc-300 italic mb-6">
-                    &ldquo;{t.quote}&rdquo;
-                  </p>
-                  <div className="mt-auto">
-                    <p className="font-semibold text-zinc-900 dark:text-white">{t.author}</p>
-                    <p className="text-sm text-zinc-500">{t.role}, {t.company}</p>
-                  </div>
-                </Card>
-              ))}
             </div>
           </Container>
         </Section>
@@ -440,26 +379,28 @@ export default async function Home() {
               Ready to Take Control of Your Assets?
             </h2>
             <p className="mx-auto max-w-2xl text-lg text-zinc-400 mb-10">
-              Join 500+ operations teams who&rsquo;ve eliminated spreadsheet chaos and gained complete asset visibility.
+              Create your workspace in minutes, import your spreadsheet, and know where every asset is.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-              <Link href="#contact" className="w-full sm:w-auto">
+              <Link href={userId ? "/dashboard" : "/sign-up"} className="w-full sm:w-auto">
                 <Button size="lg" className="w-full h-14 px-8 text-lg bg-white text-zinc-950 hover:bg-zinc-100 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200">
-                  Request a Demo
+                  {userId ? "Go to Dashboard" : "Start Free"}
                 </Button>
               </Link>
-              <Link href="/sign-in" className="w-full sm:w-auto">
-                <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-700 text-white hover:bg-zinc-800 hover:text-white dark:border-zinc-700">
-                  Sign In
-                </Button>
-              </Link>
+              {!userId && (
+                <Link href="/sign-in" className="w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-700 text-white hover:bg-zinc-800 hover:text-white dark:border-zinc-700">
+                    Sign In
+                  </Button>
+                </Link>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-zinc-500">
               <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> No credit card required</span>
-              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Free data migration</span>
-              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Cancel anytime</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Free while in early access</span>
+              <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> CSV import built in</span>
             </div>
           </Container>
         </Section>
@@ -468,8 +409,8 @@ export default async function Home() {
       {/* Footer */}
       <footer className="border-t border-zinc-100 bg-white pt-16 pb-8 dark:border-zinc-800 dark:bg-zinc-950">
         <Container>
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5 mb-12">
-            <div className="col-span-2 lg:col-span-2">
+          <div className="grid grid-cols-2 gap-8 md:grid-cols-3 mb-12">
+            <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2 mb-4">
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
                   <LayoutDashboard className="h-4 w-4" />
@@ -477,34 +418,23 @@ export default async function Home() {
                 <span className="text-xl font-bold text-zinc-900 dark:text-white">AssetLane</span>
               </Link>
               <p className="max-w-xs text-sm text-zinc-500 leading-relaxed">
-                The modern asset management platform for forward-thinking operations teams.
+                QR-code asset management for teams that have outgrown spreadsheets.
               </p>
             </div>
 
             <div>
               <h4 className="font-semibold text-zinc-900 dark:text-white mb-4">Product</h4>
               <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li><Link href="#" className="hover:text-violet-600">Features</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Pricing</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Mobile App</Link></li>
+                <li><Link href="#features" className="hover:text-violet-600">Features</Link></li>
+                <li><Link href="#faq" className="hover:text-violet-600">FAQ</Link></li>
               </ul>
             </div>
 
             <div>
-              <h4 className="font-semibold text-zinc-900 dark:text-white mb-4">Company</h4>
+              <h4 className="font-semibold text-zinc-900 dark:text-white mb-4">Get Started</h4>
               <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li><Link href="#" className="hover:text-violet-600">About</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Blog</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Careers</Link></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-zinc-900 dark:text-white mb-4">Legal</h4>
-              <ul className="space-y-3 text-sm text-zinc-600 dark:text-zinc-400">
-                <li><Link href="#" className="hover:text-violet-600">Privacy</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Terms</Link></li>
-                <li><Link href="#" className="hover:text-violet-600">Security</Link></li>
+                <li><Link href="/sign-up" className="hover:text-violet-600">Create a workspace</Link></li>
+                <li><Link href="/sign-in" className="hover:text-violet-600">Sign in</Link></li>
               </ul>
             </div>
           </div>
