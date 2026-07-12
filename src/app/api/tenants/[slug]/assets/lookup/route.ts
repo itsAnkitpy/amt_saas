@@ -74,6 +74,26 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 serialNumber: true,
                 assetTag: true,
                 status: true,
+                condition: true,
+                location: true,
+                purchaseDate: true,
+                warrantyEnd: true,
+                customFields: true,
+                category: {
+                    select: {
+                        name: true,
+                        icon: true,
+                        fieldSchema: true,
+                    },
+                },
+                images: {
+                    select: {
+                        thumbBlobUrl: true,
+                        blobUrl: true,
+                        isPrimary: true,
+                    },
+                    orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],
+                },
                 assignedTo: {
                     select: {
                         id: true,
@@ -85,7 +105,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             },
         });
 
-        return NextResponse.json({ asset: asset || null });
+        if (!asset) {
+            return NextResponse.json({ asset: null });
+        }
+
+        // Maintenance summary: latest completed job + earliest upcoming job.
+        // Both hit the (assetId, status) index; either can be null.
+        const [lastCompleted, nextDue] = await Promise.all([
+            db.maintenanceJob.findFirst({
+                // completedAt not-null: a COMPLETED job missing its timestamp
+                // must not count as "last serviced" (and Postgres sorts NULLs
+                // first on DESC, which would mask real history).
+                where: { assetId: asset.id, status: 'COMPLETED', completedAt: { not: null } },
+                orderBy: { completedAt: 'desc' },
+                select: { completedAt: true },
+            }),
+            db.maintenanceJob.findFirst({
+                where: { assetId: asset.id, status: { in: ['OPEN', 'IN_PROGRESS'] } },
+                orderBy: { dueAt: 'asc' },
+                select: { dueAt: true },
+            }),
+        ]);
+
+        return NextResponse.json({
+            asset: {
+                ...asset,
+                maintenance: {
+                    lastServicedAt: lastCompleted?.completedAt ?? null,
+                    nextDueAt: nextDue?.dueAt ?? null,
+                },
+            },
+        });
     } catch (error) {
         console.error('Asset lookup error:', error);
         return NextResponse.json(
