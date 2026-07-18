@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import dashboardPreview from "../../public/dashboard.png";
+import scanPreview from "../../public/scan.png";
 import { AssetLaneMark } from "@/components/logo";
 import {
   CheckCircle2,
@@ -13,7 +14,6 @@ import {
   Zap,
   BarChart3,
   Search,
-  Smartphone,
   X,
   ArrowRight,
   Plus
@@ -331,14 +331,13 @@ export default async function Home() {
                 </Link>
               </div>
               <div className="lg:w-1/2">
-                <div className="relative rounded-2xl bg-zinc-900 p-2 shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 rotate-1 transform transition-transform hover:rotate-0 duration-500">
-                  <div className="aspect-[4/3] rounded-xl bg-zinc-800 overflow-hidden relative">
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Smartphone className="h-20 w-20 text-zinc-600" />
-                    </div>
-                    {/* Mockup decoration */}
-                    <div className="absolute top-4 left-4 right-4 h-8 bg-zinc-700/50 rounded-full w-1/3"></div>
-                  </div>
+                <div className="relative mx-auto max-w-md overflow-hidden rounded-2xl shadow-2xl ring-1 ring-zinc-200 dark:ring-zinc-800 rotate-1 transform transition-transform hover:rotate-0 duration-500">
+                  <Image
+                    src={scanPreview}
+                    alt="Scanning an asset QR label with the AssetLane mobile app"
+                    className="h-auto w-full"
+                    sizes="(min-width: 1024px) 28rem, 92vw"
+                  />
                 </div>
               </div>
             </div>
