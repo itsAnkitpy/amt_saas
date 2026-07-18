@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import dashboardPreview from "../../public/dashboard.png";
+import { AssetLaneMark } from "@/components/logo";
 import {
   CheckCircle2,
   ChevronRight,
-  LayoutDashboard,
   ShieldCheck,
   Zap,
   BarChart3,
@@ -148,9 +148,7 @@ export default async function Home() {
       <nav className="sticky top-0 z-50 border-b border-zinc-100 bg-white/80 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/80">
         <Container className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center gap-2 group">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-white transition-transform group-hover:scale-105">
-              <LayoutDashboard className="h-5 w-5" />
-            </div>
+            <AssetLaneMark className="h-9 w-9 transition-transform group-hover:scale-105" />
             <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white">AssetLane</span>
           </Link>
 
@@ -412,9 +410,7 @@ export default async function Home() {
           <div className="grid grid-cols-2 gap-8 md:grid-cols-3 mb-12">
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2 mb-4">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white">
-                  <LayoutDashboard className="h-4 w-4" />
-                </div>
+                <AssetLaneMark className="h-8 w-8" />
                 <span className="text-xl font-bold text-zinc-900 dark:text-white">AssetLane</span>
               </Link>
               <p className="max-w-xs text-sm text-zinc-500 leading-relaxed">
