@@ -387,7 +387,7 @@ export default async function Home() {
               </Link>
               {!userId && (
                 <Link href="/sign-in" className="w-full sm:w-auto">
-                  <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg border-zinc-700 text-white hover:bg-zinc-800 hover:text-white dark:border-zinc-700">
+                  <Button size="lg" variant="outline" className="w-full h-14 px-8 text-lg bg-transparent border-zinc-700 text-white hover:bg-zinc-800 hover:text-white dark:border-zinc-700">
                     Sign In
                   </Button>
                 </Link>
