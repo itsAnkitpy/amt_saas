@@ -88,22 +88,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             where: { id: imageId }
         });
 
-        // Then delete files from storage
-        // Use blob URLs if available (cloud storage), otherwise use file paths (local storage)
+        // Then delete files from storage — every provider addresses files by path
         const storage = getStorage();
-        const deletePromises = [];
+        const deletePromises = [storage.delete(image.filePath)];
 
-        // Delete original image
-        if (image.blobUrl) {
-            deletePromises.push(storage.delete(image.blobUrl));
-        } else {
-            deletePromises.push(storage.delete(image.filePath));
-        }
-
-        // Delete thumbnail
-        if (image.thumbBlobUrl) {
-            deletePromises.push(storage.delete(image.thumbBlobUrl));
-        } else if (image.thumbPath) {
+        if (image.thumbPath) {
             deletePromises.push(storage.delete(image.thumbPath));
         }
 

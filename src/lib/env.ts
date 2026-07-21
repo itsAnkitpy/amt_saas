@@ -15,7 +15,12 @@ const EnvSchema = z.object({
     CLERK_SECRET_KEY: z.string().min(1, 'CLERK_SECRET_KEY is required'),
     CLERK_WEBHOOK_SECRET: z.string().optional(),
 
-    // Storage (optional - falls back to local storage)
+    // Storage (optional - falls back to local storage).
+    // BLOB_STORE_ID is injected by Vercel when a Blob store is connected to the
+    // project, and is what selects the blob provider (see lib/storage/index.ts).
+    // BLOB_READ_WRITE_TOKEN is only needed to reach the store from outside Vercel;
+    // on Vercel the SDK authenticates with a short-lived OIDC token instead.
+    BLOB_STORE_ID: z.string().optional(),
     BLOB_READ_WRITE_TOKEN: z.string().optional(),
 
     // Cron — used by /api/cron/notifications/daily bearer auth.

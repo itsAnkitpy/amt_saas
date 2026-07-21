@@ -60,12 +60,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        // If blob URL exists, redirect to CDN for faster delivery
-        if (image.blobUrl) {
-            return NextResponse.redirect(image.blobUrl);
-        }
-
-        // Get file from local storage
+        // Stream the file through this route — never redirect to storage.
+        // A redirect would hand the caller a URL that outlives the tenant check
+        // above, so access could never be withdrawn once granted.
         const storage = getStorage();
         const buffer = await storage.getBuffer(image.filePath);
 
@@ -81,7 +78,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             headers: {
                 'Content-Type': image.mimeType,
                 'Content-Length': buffer.length.toString(),
-                'Cache-Control': 'private, max-age=3600', // Cache for 1 hour
+                'X-Content-Type-Options': 'nosniff',
+                // Browser may keep a copy but must revalidate, so the tenant
+                // check above runs on every request. max-age would let a revoked
+                // user keep viewing a cached image until it expired.
+                'Cache-Control': 'private, no-cache',
             }
         });
 

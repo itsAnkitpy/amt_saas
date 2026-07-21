@@ -87,9 +87,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                     },
                 },
                 images: {
+                    // id only — the client builds /api/images/[id]/thumb and
+                    // fetches it with its auth token. Private store, no URLs.
                     select: {
-                        thumbBlobUrl: true,
-                        blobUrl: true,
+                        id: true,
                         isPrimary: true,
                     },
                     orderBy: [{ isPrimary: 'desc' }, { sortOrder: 'asc' }],

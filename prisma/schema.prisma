@@ -287,13 +287,16 @@ model AssetImage {
   asset   Asset  @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
   // File metadata
-  fileName     String // Original filename from upload
-  filePath     String // Storage path: "tenant-id/assets/asset-id/original-xxx.jpg"
-  thumbPath    String? // Thumbnail path (optional)
-  mimeType     String // "image/jpeg", "image/png", etc.
-  size         Int // File size in bytes
-  blobUrl      String? // Full Vercel Blob URL (null for local storage)
-  thumbBlobUrl String? // Thumbnail Blob URL (null for local storage)
+  fileName  String // Original filename from upload
+  filePath  String // Storage path: "tenant-id/assets/asset-id/original-xxx.jpg"
+  thumbPath String? // Thumbnail path (optional)
+  mimeType  String // "image/jpeg", "image/png", etc.
+  size      Int // File size in bytes
+
+  // No URL columns: the Blob store is private, so files have no publicly
+  // reachable address. filePath/thumbPath are the single source of truth and
+  // every read goes through /api/images/[imageId] behind the tenant check.
+  // See PRD 13.
 
   // Display
   isPrimary Boolean @default(false)

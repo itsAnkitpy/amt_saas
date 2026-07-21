@@ -63,12 +63,15 @@ export function isAllowedMimeType(mimeType: string): mimeType is AllowedMimeType
 }
 
 /**
- * Generate a unique filename with original extension
+ * Generate a unique filename with original extension.
+ *
+ * Uses crypto.randomUUID() rather than Math.random(): filenames form part of the
+ * storage path, so they must not be predictable from a previously seen filename.
  */
 export function generateFileName(originalName: string, prefix: string = ''): string {
     const ext = originalName.split('.').pop()?.toLowerCase() || 'jpg';
     const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
+    const random = crypto.randomUUID().replace(/-/g, '').substring(0, 12);
     return `${prefix}${timestamp}-${random}.${ext}`;
 }
 

@@ -57,16 +57,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        // If blob URL exists, redirect to CDN for faster delivery
-        if (image.thumbBlobUrl) {
-            return NextResponse.redirect(image.thumbBlobUrl);
-        }
-        // Fallback to original blob URL if no thumbnail blob
-        if (image.blobUrl && !image.thumbPath) {
-            return NextResponse.redirect(image.blobUrl);
-        }
-
-        // Use thumbnail path if available, otherwise fall back to original (local storage)
+        // Stream the file through this route — never redirect to storage.
+        // A redirect would hand the caller a URL that outlives the tenant check
+        // above, so access could never be withdrawn once granted.
+        //
+        // Use thumbnail path if available, otherwise fall back to the original
         const storage = getStorage();
         const filePath = image.thumbPath || image.filePath;
         const buffer = await storage.getBuffer(filePath);
@@ -83,7 +78,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             headers: {
                 'Content-Type': image.thumbPath ? 'image/jpeg' : image.mimeType,
                 'Content-Length': buffer.length.toString(),
-                'Cache-Control': 'private, max-age=86400', // Cache thumbnails longer (24 hours)
+                'X-Content-Type-Options': 'nosniff',
+                // Revalidate every request so the tenant check above always runs.
+                'Cache-Control': 'private, no-cache',
             }
         });
 
